@@ -2,20 +2,32 @@ import numpy as np
 import h5py
 import sys
 import time
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+INPUTS = cfg.INPUTS
+INVOCATIONS = cfg.INVOCATIONS
 
 ICS_DIR = 'ics_original_010/'
 
 class IOPS_Extractor:
   def __init__(self):
     self.CompleteTraceFiles = []
-    for t in range(0, 16):
+    for t in range(0, INPUTS):
       fname = '../Processed_HDF5/part_'+str(t).zfill(2)+'.hdf5'
       print('Loading', fname)
       self.CompleteTraceFiles.append(h5py.File(fname, 'r'))
     return
   
   def close(self):
-    for t in range(0, 16):
+    for t in range(0, INPUTS):
       print('Closing file part '+str(t).zfill(2))
       self.CompleteTraceFiles[t].close()
   
@@ -25,12 +37,12 @@ class IOPS_Extractor:
     name_ics = ICS_DIR+'ics_'+Tag+'_i'+str(Num).zfill(2)+'.npy'
     ICs = np.load(name_ics)
     IoPs = []
-    for part in range(0, 16):
+    for part in range(0, INPUTS):
       print('part '+str(part).zfill(2), time.asctime())
       IoPs_Part = []
       for it in range(0, len(ICs)):
-        L = ICs[it]*10
-        U = L+10
+        L = ICs[it]*INVOCATIONS
+        U = L+INVOCATIONS
         IoPs_Part.append(self.CompleteTraceFiles[part]['Traces'][:,L:U])
       IoPs.append(np.hstack(IoPs_Part))
     name_output = 'IoPs/Ints_'+Tag+'_i'+str(Num).zfill(2)+'.hdf5'

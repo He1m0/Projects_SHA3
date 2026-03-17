@@ -2,11 +2,22 @@ import numpy as np
 import os
 from array import array
 import sys
+from pathlib import Path
 import KECCAK as kec
 import serv_manager as svm
 import time
 import h5py
-trace_len = 7500000
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+trace_len = cfg.DETECTION_TRACE_LEN
+INPUTS = cfg.INPUTS
+INVOCATIONS = cfg.INVOCATIONS
 OFFSET = 75000+455
 PPC = 500
 OUTSIZE = 14500*10
@@ -16,7 +27,7 @@ def preprocessing(HDF5_name, InputDir):
   # IO data checking.
   Data_In = svm.Load((InputDir+"data_in.npy"))
   Data_Out = svm.Load((InputDir+"data_out.npy"))
-  for t in range(0, 16):
+  for t in range(0, INPUTS):
     print("==================================================")
     print("Checking #"+str(t))
     A = Data_Out[t]
@@ -38,8 +49,8 @@ def preprocessing(HDF5_name, InputDir):
   Corrs = []
   CorrName = "Corrcoefs/"+InputDir[6:-1]+".npy"
   Ref_Trace = svm.Load(NAME_REF)
-  for t in range(0, 16):
-    for inv in range(0, 10):
+  for t in range(0, INPUTS):
+    for inv in range(0, INVOCATIONS):
       print("=============================================================")
       InputName = InputDir+"trace_"+str(t).zfill(4)+"_"+str(inv)+"_ch0.bin"
       print(InputName)

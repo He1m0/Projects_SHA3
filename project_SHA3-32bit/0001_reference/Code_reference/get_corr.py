@@ -2,7 +2,18 @@ import numpy as np
 import os
 from array import array
 import sys
-trace_len = 7500000
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+folders = cfg.REFERENCE_FOLDERS
+inputs = cfg.INPUTS
+trace_len = cfg.REFERENCE_TRACE_LEN
+invocations = cfg.INVOCATIONS
 
 def read_wave(input_name):
   print(input_name)
@@ -26,7 +37,7 @@ def corr_calculate(set_size, set_num):
     os.system(("unzip "+tr_zip))
     for t in range(0, set_size):
       print("================================================")
-      tr_name = tr_dir+"trace_"+str((t//10)).zfill(4)+"_"+str((t%10))+"_ch0.bin"
+      tr_name = tr_dir+"trace_"+str((t//invocations)).zfill(4)+"_"+str((t%invocations))+"_ch0.bin"
       trace = read_wave(tr_name)
       corr = np.corrcoef(trace, trace_ref)[0][1]
       Corrs.append(corr)
@@ -56,8 +67,8 @@ def show_statistics(set_size, set_num, Times):
 if __name__=='__main__':
   Tag = sys.argv[1]
   Ts = int(sys.argv[2])
-  S_size = 160
-  S_num = 10
+  S_size = inputs*invocations
+  S_num = folders
   if (Tag=="find") or (Tag=="all"):
     corr_calculate(S_size, S_num)
   if (Tag=="show") or (Tag=="all"):

@@ -2,8 +2,20 @@ import numpy as np
 import os
 from array import array
 import sys
+from pathlib import Path
 import serv_manager as svm
-trace_len = 7500000
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+DIR = str(Path(__file__).resolve().parent)
+folders = cfg.REFERENCE_FOLDERS
+inputs = cfg.INPUTS
+trace_len = cfg.REFERENCE_TRACE_LEN
+invocations = cfg.INVOCATIONS
 
 def read_wave(input_name):
   print(input_name)
@@ -19,19 +31,19 @@ def read_wave(input_name):
 
 def ref_calculate():
   total = np.array([0.0]*trace_len)
-  for Set_n in range(0, 10):
+  for Set_n in range(0, folders):
     tag = "RE_"+str(Set_n).zfill(4)
-    in_dir = "./Raw_"+tag+"/"
-    in_zip = "../Raw/Raw_"+tag+".zip"
+    in_dir = DIR+"/Raw_"+tag+"/"
+    in_zip = DIR+"/../Raw/Raw_"+tag+".zip"
     svm.System(("unzip "+in_zip))
-    for t in range(0, 16):
-      for inv in range(0, 10):
+    for t in range(0, inputs):
+      for inv in range(0, invocations):
         print("=============================================================")
         InputName = in_dir+"trace_"+str(t).zfill(4)+"_"+str(inv)+"_ch0.bin"
         trace = read_wave(InputName)
         total += trace
     svm.System(("rm -vr "+in_dir))
-  Average = total/1600.0
+  Average = total/(inputs*invocations*folders)
   svm.Save("ref_trace.npy", Average)
 
 

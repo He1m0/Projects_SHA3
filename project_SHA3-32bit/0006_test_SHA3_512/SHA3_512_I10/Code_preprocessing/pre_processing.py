@@ -2,11 +2,20 @@ import numpy as np
 import os
 from array import array
 import sys
+from pathlib import Path
 import KECCAK as kec
 import serv_manager as svm
 import time
 import h5py
-trace_len = 7500000
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+trace_len = cfg.DETECTION_TRACE_LEN
 OFFSET = 75000+455
 PPC = 500
 OUTSIZE = 14500*10
