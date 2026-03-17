@@ -1,0 +1,6 @@
+project_SHA3-32bit/0001_reference/Raw/*
+project_SHA3-32bit/0001_reference/Code_reference/Raw*
+Raw*
+*.npy
+*.txt
+*.pyc
