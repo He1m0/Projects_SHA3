@@ -6,11 +6,20 @@ from numpy import linalg as LA
 from sklearn.linear_model import LinearRegression
 import serv_manager as svm
 import h5py
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
 
 Dir_iops = '../Code_find_IoPs/IoPs/'
 Dir_intermediate = './intermediate_values/'
-SET_NUM = 400
-SET_SIZE = 160
+SET_NUM = cfg.TRAINING_SET_COUNT
+SET_SIZE = cfg.INPUTS*cfg.INVOCATIONS
 Total_Tnum = SET_NUM*SET_SIZE
 
 Bits = np.matrix(np.load('Bits.npy')[:,0:8])

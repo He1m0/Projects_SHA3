@@ -1,7 +1,17 @@
 import os
 import sys
 import numpy as np
-trace_num = 64000
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+trace_num = cfg.TRAINING_SET_COUNT*cfg.INPUTS*cfg.INVOCATIONS
 
 Tr_Mat = np.matrix([[128],[64],[32],[16],[8],[4],[2],[1]])
 

@@ -18,9 +18,9 @@ import global_config as cfg
 trace_len = cfg.DETECTION_TRACE_LEN
 INPUTS = cfg.INPUTS
 INVOCATIONS = cfg.INVOCATIONS
-OFFSET = 75000+455
-PPC = 500
-OUTSIZE = 14500*10
+OFFSET = cfg.TRAINING_TRACE_OFFSET
+PPC = cfg.TRAINING_PPC
+OUTSIZE = cfg.TRAINING_OUTPUT_SIZE
 R_Bound = 0.980
 NAME_REF = "../../0001_reference/Code_reference/ref_trace.npy"
 def preprocessing(HDF5_name, InputDir):
@@ -66,8 +66,8 @@ def preprocessing(HDF5_name, InputDir):
         return False
       Corrs.append(corr)
       for S in range(0, OUTSIZE):
-        lower = OFFSET+S*50
-        upper = lower+50
+        lower = OFFSET+S*PPC
+        upper = lower+PPC
         sample = sum(float_array[lower:upper])
         Samples.append(sample)
       Proc_Traces.append(Samples)

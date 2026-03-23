@@ -12,22 +12,22 @@ if str(ROOT_DIR) not in sys.path:
 
 import global_config as cfg
 
-INPUTS = cfg.INPUTS
 INVOCATIONS = cfg.INVOCATIONS
+PART_COUNT = cfg.TRAINING_PART_COUNT
 
 ICS_DIR = 'ics_original_010/'
 
 class IOPS_Extractor:
   def __init__(self):
     self.CompleteTraceFiles = []
-    for t in range(0, INPUTS):
+    for t in range(0, PART_COUNT):
       fname = '../Processed_HDF5/part_'+str(t).zfill(2)+'.hdf5'
       print('Loading', fname)
       self.CompleteTraceFiles.append(h5py.File(fname, 'r'))
     return
   
   def close(self):
-    for t in range(0, INPUTS):
+    for t in range(0, PART_COUNT):
       print('Closing file part '+str(t).zfill(2))
       self.CompleteTraceFiles[t].close()
   
@@ -37,7 +37,7 @@ class IOPS_Extractor:
     name_ics = ICS_DIR+'ics_'+Tag+'_i'+str(Num).zfill(2)+'.npy'
     ICs = np.load(name_ics)
     IoPs = []
-    for part in range(0, INPUTS):
+    for part in range(0, PART_COUNT):
       print('part '+str(part).zfill(2), time.asctime())
       IoPs_Part = []
       for it in range(0, len(ICs)):

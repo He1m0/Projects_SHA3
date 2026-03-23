@@ -1,6 +1,7 @@
 lower=0
-upper=400
-part=16
+upper=${SHA3_TRAINING_SET_COUNT:-400}
+sets_per_part=${SHA3_TRAINING_SETS_PER_PART:-25}
+part=$(( (upper + sets_per_part - 1) / sets_per_part ))
 mkdir ../Processed_HDF5/
 mkdir Corrcoefs/
 mkdir data_raw_in/

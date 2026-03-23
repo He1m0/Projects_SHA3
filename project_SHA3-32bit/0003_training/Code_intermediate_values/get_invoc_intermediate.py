@@ -1,5 +1,16 @@
 import numpy as np
 import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+TOTAL_TRACES = cfg.TRAINING_SET_COUNT*cfg.INPUTS*cfg.INVOCATIONS
 str2num = {'0': 0, '1': 1, '2': 2, '3': 3,\
            '4': 4, '5': 5, '6': 6, '7': 7,\
            '8': 8, '9': 9, 'a':10, 'b':11,\
@@ -126,7 +137,7 @@ def find_intervalues(Tag, Rd):
   else:
     print("Error: wrong tag.")
     return
-  for t in range(0, 64000):
+  for t in range(0, TOTAL_TRACES):
     print("=================================================")
     print("Trace #"+str(t).zfill(6)+" "+Tag+str(Rd).zfill(2))
     Str_Out, Str_Inter = Kec_f1600_inter(In[t], Tag, Rd)
