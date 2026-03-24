@@ -21,7 +21,7 @@ INVOCATIONS = cfg.INVOCATIONS
 OFFSET = cfg.TRAINING_TRACE_OFFSET
 PPC = cfg.TRAINING_PPC
 OUTSIZE = cfg.TRAINING_OUTPUT_SIZE
-R_Bound = 0.980
+R_Bound = cfg.TRAINING_CORR_BOUND
 NAME_REF = "../../0001_reference/Code_reference/ref_trace.npy"
 def preprocessing(HDF5_name, InputDir):
   # IO data checking.

@@ -2,11 +2,19 @@ import numpy as np
 import h5py
 import sys
 import time
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
 
 TAG = 'DN'
-SET_SIZE = 160
-SET_NUM = 25
-TraceLen = 14500
+SET_SIZE = cfg.INPUTS*cfg.INVOCATIONS
+SET_NUM = cfg.DETECTION_SETS_PER_PART
+SET_COUNT = cfg.DETECTION_SET_COUNT
+TraceLen = cfg.DETECTION_OUTPUT_SIZE
 
 def PartGenerate(part):
   print('===================================================================')
@@ -14,9 +22,13 @@ def PartGenerate(part):
   Fname = '../Processed_HDF5/part_'+str(part).zfill(2)+'.hdf5'
   print(Fname)
   lower = part*SET_NUM
-  upper = lower+SET_NUM
+  upper = min(lower+SET_NUM, SET_COUNT)
+  if lower>=SET_COUNT:
+    print('Skipped empty part range.')
+    return
+  sets_in_part = upper-lower
   FILE = h5py.File(Fname, 'w')
-  Traces = FILE.create_dataset('Traces', (SET_SIZE*SET_NUM, TraceLen), dtype='f8', compression="gzip", compression_opts=9)
+  Traces = FILE.create_dataset('Traces', (SET_SIZE*sets_in_part, TraceLen), dtype='f8', compression="gzip", compression_opts=9)
   for set_idx in range(lower, upper):
     print('    +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
     Sname = '../Processed_HDF5/Processed_'+TAG+'_'+str(set_idx).zfill(4)+'.hdf5'
@@ -36,7 +48,10 @@ def Check(part):
   Fname = '../Processed_HDF5/part_'+str(part).zfill(2)+'.hdf5'
   print(Fname)
   lower = part*SET_NUM
-  upper = lower+SET_NUM
+  upper = min(lower+SET_NUM, SET_COUNT)
+  if lower>=SET_COUNT:
+    print('Skipped empty part range.')
+    return
   FILE = h5py.File(Fname, 'r')
   for set_idx in range(lower, upper):
     print('    +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
