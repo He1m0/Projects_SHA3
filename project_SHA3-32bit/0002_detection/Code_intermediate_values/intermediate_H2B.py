@@ -1,7 +1,6 @@
 import os
 import sys
 import numpy as np
-trace_num = 16000
 
 Tr_Mat = np.matrix([[128],[64],[32],[16],[8],[4],[2],[1]])
 
@@ -25,6 +24,7 @@ def intermediate_translate(tag):
   out_dir = "intermediate_values/intermediate_B_"+tag+"/"
   os.system(("mkdir "+out_dir))
   Str_In = np.load(inname)
+  trace_num = len(Str_In)
   for t in range(0, trace_num):
     print("Processing trace #"+str(t))
     in_str = Str_In[t]
@@ -52,9 +52,13 @@ def checking(tag):
   hex_name = "Invocation_IO/intermediate_H_"+tag+".npy"
   byte_dir = "intermediate_values/intermediate_B_"+tag+"/"
   Str_hex = np.load(hex_name)
+  trace_num = len(Str_hex)
   for b in range(0, Size):
     byte_name = byte_dir+tag+"_b"+str(b).zfill(3)+".npy"
     X_byte = np.load(byte_name)
+    if len(X_byte)!=trace_num:
+      print("Error: trace count mismatch in", byte_name)
+      return
     ANS = X_byte*Tr_Mat
     for t in range(0, trace_num):
       x_hex = Str_hex[t][(2*b):(2*b+2)]

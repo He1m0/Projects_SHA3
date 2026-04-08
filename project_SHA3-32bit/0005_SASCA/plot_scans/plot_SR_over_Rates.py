@@ -1,7 +1,13 @@
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-Total = {'4':1000.0, '3':1000.0, '2':1000.0}
+import os
+
+sys.path.append(os.path.abspath('../../'))
+import global_config as gc
+
+total = float(gc.SASCA_TRACE_COUNT)
+Total = {'4': total, '3': total, '2': total}
 X_NUM = 8*np.array((range(0, 201)))
 def get_data(rd):
   fname = '../Rate_Scan_'+str(rd)+'R/rate_scan_'+str(rd)+'R_B.npy'

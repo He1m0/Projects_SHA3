@@ -1,11 +1,19 @@
 import numpy as np
 import sys
+from pathlib import Path
 
-Dir_Name = "./Rank_O010/"
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+Dir_Name = "./Rank_O"+cfg.VALIDATION_TEMPLATE_TAG+"/"
 
 def Draw(func, outname, L, U):
   Ranks = []
-  Tnum = 1000.0*(U-L)
   if (func[0]=='A')or(func[0]=='B'):
     Size = 200
     N_lane = 25
@@ -22,6 +30,7 @@ def Draw(func, outname, L, U):
       res = np.load(filename)
       for t in range(0, len(res)):
         Ranks[b].append(res[t])
+  Tnum = float(len(Ranks[0])) if len(Ranks[0])>0 else 1.0
   Output_str = "\\begin{tabular}{|c|*{8}{r|}}\n\\hline\n\\backslashbox{$(i,j)$}{$k$} "
   for k in range(0, 8):
     Output_str += ("&\n\\multicolumn{1}{c|}{"+str(k)+"}")

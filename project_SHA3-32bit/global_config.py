@@ -17,7 +17,7 @@ def _load_dotenv_file(path):
     key, value = line.split("=", 1)
     key = key.strip()
     value = value.strip().strip('"').strip("'")
-    if key and (key not in os.environ):
+    if key:
       os.environ[key] = value
 
 
@@ -50,6 +50,24 @@ def _env_float(name, default):
     raise ValueError("Invalid float for {}: {}".format(name, value)) from exc
 
 
+def _env_float_list(name, default):
+  value = os.getenv(name)
+  if value is None:
+    return default
+  values = []
+  for item in value.split(","):
+    stripped = item.strip()
+    if not stripped:
+      continue
+    try:
+      values.append(float(stripped))
+    except ValueError as exc:
+      raise ValueError("Invalid float list item for {}: {}".format(name, stripped)) from exc
+  if len(values)==0:
+    raise ValueError("Invalid float list for {}: {}".format(name, value))
+  return values
+
+
 # Shared loop sizes.
 INPUTS = _env_int("SHA3_INPUTS", 16)
 INVOCATIONS = _env_int("SHA3_INVOCATIONS", 10)
@@ -70,6 +88,13 @@ DETECTION_PPC = _env_int("SHA3_DETECTION_PPC", 500)
 DETECTION_OUTPUT_SIZE = _env_int("SHA3_DETECTION_OUTPUT_SIZE", 14500)
 DETECTION_SAMPLE_SHIFT = _env_int("SHA3_DETECTION_SAMPLE_SHIFT", 20)
 DETECTION_SAMPLE_WIDTH = _env_int("SHA3_DETECTION_SAMPLE_WIDTH", 50)
+DETECTION_ROUNDS = _env_int("SHA3_DETECTION_ROUNDS", 4)
+DETECTION_ICS_WORDS_AB = _env_int("SHA3_DETECTION_ICS_WORDS_AB", 50)
+DETECTION_ICS_WORDS_CD = _env_int("SHA3_DETECTION_ICS_WORDS_CD", 10)
+DETECTION_ICS_THRESHOLDS = _env_float_list(
+  "SHA3_DETECTION_ICS_THRESHOLDS",
+  [0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
+)
 TRAINING_SET_COUNT = _env_int("SHA3_TRAINING_SET_COUNT", 400)
 VALIDATION_SET_COUNT = _env_int("SHA3_VALIDATION_SET_COUNT", 40)
 
@@ -81,3 +106,21 @@ TRAINING_OUTPUT_SIZE = _env_int("SHA3_TRAINING_OUTPUT_SIZE", 145000)
 TRAINING_SETS_PER_PART = _env_int("SHA3_TRAINING_SETS_PER_PART", 25)
 TRAINING_PART_COUNT = (TRAINING_SET_COUNT + TRAINING_SETS_PER_PART - 1) // TRAINING_SETS_PER_PART
 TRAINING_CORR_BOUND = _env_float("SHA3_TRAINING_CORR_BOUND", 0.98)
+TRAINING_ICS_LEVEL = _env_int("SHA3_TRAINING_ICS_LEVEL", 10)
+
+# Validation preprocessing / packaging parameters.
+VALIDATION_TRACE_OFFSET = _env_int("SHA3_VALIDATION_TRACE_OFFSET", 75000 + 455)
+VALIDATION_PPC = _env_int("SHA3_VALIDATION_PPC", 500)
+VALIDATION_OUTPUT_SIZE = _env_int("SHA3_VALIDATION_OUTPUT_SIZE", 14500 * 10)
+VALIDATION_CORR_BOUND = _env_float("SHA3_VALIDATION_CORR_BOUND", 0.98)
+VALIDATION_SETS_PER_PART = _env_int("SHA3_VALIDATION_SETS_PER_PART", 10)
+VALIDATION_PART_COUNT = (VALIDATION_SET_COUNT + VALIDATION_SETS_PER_PART - 1) // VALIDATION_SETS_PER_PART
+VALIDATION_TEMPLATE_TAG = str(_env_int("SHA3_VALIDATION_TEMPLATE_TAG", 10)).zfill(3)
+VALIDATION_ICS_TAG = str(_env_int("SHA3_VALIDATION_ICS_TAG", TRAINING_ICS_LEVEL)).zfill(3)
+
+# 0005_SASCA parameters.
+VALIDATION_TRACE_COUNT = VALIDATION_SET_COUNT * VALIDATION_INPUTS * INVOCATIONS
+SASCA_TRACE_COUNT = _env_int("SHA3_SASCA_TRACE_COUNT", min(1000, VALIDATION_TRACE_COUNT))
+SASCA_TEMPLATE_TAG = str(_env_int("SHA3_SASCA_TEMPLATE_TAG", int(VALIDATION_TEMPLATE_TAG))).zfill(3)
+SASCA_ICS_TAG = str(_env_int("SHA3_SASCA_ICS_TAG", int(VALIDATION_ICS_TAG))).zfill(3)
+SASCA_PPC = _env_int("SHA3_SASCA_PPC", 10)

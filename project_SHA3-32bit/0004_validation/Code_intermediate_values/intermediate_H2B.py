@@ -1,7 +1,17 @@
 import os
 import sys
 import numpy as np
-trace_num = 100*40
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+trace_num = cfg.VALIDATION_INPUTS*cfg.VALIDATION_SET_COUNT*cfg.INVOCATIONS
 
 str2num = {'0': 0, '1': 1, '2': 2, '3': 3,\
            '4': 4, '5': 5, '6': 6, '7': 7,\

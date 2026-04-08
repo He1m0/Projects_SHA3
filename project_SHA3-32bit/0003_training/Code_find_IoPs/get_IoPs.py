@@ -14,8 +14,9 @@ import global_config as cfg
 
 INVOCATIONS = cfg.INVOCATIONS
 PART_COUNT = cfg.TRAINING_PART_COUNT
+ICS_LEVEL = str(cfg.TRAINING_ICS_LEVEL).zfill(3)
 
-ICS_DIR = 'ics_original_010/'
+ICS_DIR = 'ics_original_'+ICS_LEVEL+'/'
 
 class IOPS_Extractor:
   def __init__(self):

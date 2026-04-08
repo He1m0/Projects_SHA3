@@ -118,6 +118,10 @@ def Kec_f1600_inter(str_in, tag, rd):
 def find_intervalues(Tag, Rd):
   In = np.load("Invocation_IO/trace_input.npy")
   Out = np.load("Invocation_IO/trace_output.npy")
+  if len(In)!=len(Out):
+    print("Error: trace_input/trace_output size mismatch.")
+    return
+  trace_num = len(In)
   Inter_Values = []
   if Tag=='A' or Tag=='B' or Tag=='E':
     Size = 400
@@ -126,7 +130,7 @@ def find_intervalues(Tag, Rd):
   else:
     print("Error: wrong tag.")
     return
-  for t in range(0, 16000):
+  for t in range(0, trace_num):
     print("=================================================")
     print("Trace #"+str(t).zfill(6)+" "+Tag+str(Rd).zfill(2))
     Str_Out, Str_Inter = Kec_f1600_inter(In[t], Tag, Rd)

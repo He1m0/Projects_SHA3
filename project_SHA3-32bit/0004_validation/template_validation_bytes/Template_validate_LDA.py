@@ -4,11 +4,21 @@ import sys
 import os
 import serv_manager as svm
 import h5py
+from pathlib import Path
 
-PPC = 10
-TEST_SIZE = 1000
-ICS_TAG = '010'
-DIR_TEMPLATES = 'templateLDA_O'+ICS_TAG+'/'
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+PPC = cfg.INVOCATIONS
+TEST_SIZE = cfg.VALIDATION_INPUTS*cfg.INVOCATIONS*cfg.VALIDATION_SETS_PER_PART
+TEMPLATE_TAG = cfg.VALIDATION_TEMPLATE_TAG
+ICS_TAG = cfg.VALIDATION_ICS_TAG
+DIR_TEMPLATES = 'templateLDA_O'+TEMPLATE_TAG+'/'
 DIR_ICS = 'ics_original_'+ICS_TAG+'/'
 DIR_TRACES = '../Processed_HDF5/'
 
@@ -141,12 +151,12 @@ def main(set_n, trace_number=TEST_SIZE):
     print('Saving Files (round '+str(rd)+')')
     for byte in range(0, 200):
       tail = str(rd).zfill(2)+'_b'+str(byte).zfill(3)+'_s'+str(set_n).zfill(3)+'.npy'
-      svm.Save(('./Rank_O'+ICS_TAG+'/rank_A'+tail), Rank_A[rd][:,byte])
-      svm.Save(('./Rank_O'+ICS_TAG+'/rank_B'+tail), Rank_B[rd][:,byte])
+      svm.Save(('./Rank_O'+TEMPLATE_TAG+'/rank_A'+tail), Rank_A[rd][:,byte])
+      svm.Save(('./Rank_O'+TEMPLATE_TAG+'/rank_B'+tail), Rank_B[rd][:,byte])
       if byte>=40:
         continue
-      svm.Save(('./Rank_O'+ICS_TAG+'/rank_C'+tail), Rank_C[rd][:,byte])
-      svm.Save(('./Rank_O'+ICS_TAG+'/rank_D'+tail), Rank_D[rd][:,byte])
+      svm.Save(('./Rank_O'+TEMPLATE_TAG+'/rank_C'+tail), Rank_C[rd][:,byte])
+      svm.Save(('./Rank_O'+TEMPLATE_TAG+'/rank_D'+tail), Rank_D[rd][:,byte])
   return
 
 if __name__=='__main__':

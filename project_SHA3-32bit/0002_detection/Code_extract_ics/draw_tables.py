@@ -1,11 +1,22 @@
 import numpy as np
 import os
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
 def Draw(bound, rd):
   Dir = "ics_original_"+bound+"/" 
   Outputs = "\\begin{table}\n"
   B_str = str(0.001*float(bound))
   Outputs += "\\caption{Numbers of detected interesting clock cycles in round "+str(rd)
-  Outputs += " with threshold "+B_str+" ($\Omega = "+str(rd)+", R^2>"+B_str+"$)}\\"
+  Outputs += " with threshold "+B_str+" ($\\Omega = "+str(rd)+", R^2>"+B_str+"$)}\\"
   Outputs += "label{tab:ICS_O"+bound+"_R"+str(rd)+"}\n"
   Outputs += "\\begin{center}"
   Outputs += "\\begin{tabular}{|c|*{4}{c|}}\n\\hline\n"
@@ -43,9 +54,9 @@ def Draw(bound, rd):
   return
 
 if __name__=='__main__':
-  for s in range(1, 10):
-    tag = str(s*10).zfill(3)
+  for bnd in cfg.DETECTION_ICS_THRESHOLDS:
+    tag = str(int(round(bnd*1000))).zfill(3)
     os.system(('unzip -qq ics_original_'+tag+'.zip'))
-    for rd in range(0, 4):
+    for rd in range(0, cfg.DETECTION_ROUNDS):
       Draw(tag, rd)
     os.system(('rm -r ics_original_'+tag+'/'))

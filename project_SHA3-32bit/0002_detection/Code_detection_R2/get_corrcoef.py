@@ -1,15 +1,25 @@
 import numpy as np
 import os
+import sys
+from pathlib import Path
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 import serv_manager as svm
 import time
 import h5py
 
-OUTSIZE = 14500
-GROUPSIZE = 160
-SETS = 100
-PARTS = 4
+ROOT_DIR = Path(__file__).resolve().parent
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+
+import global_config as cfg
+
+OUTSIZE = cfg.DETECTION_OUTPUT_SIZE
+GROUPSIZE = cfg.INPUTS*cfg.INVOCATIONS
+SETS = cfg.DETECTION_SET_COUNT
+PARTS = cfg.DETECTION_PART_COUNT
 
 class Scatter_Model:
   def __init__(self):
