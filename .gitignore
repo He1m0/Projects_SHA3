@@ -8,3 +8,5 @@ Raw*
 /project_SHA3-32bit/0003_training/Processed_HDF5/*
 *.zip
 *.hdf5
+/traces
+tmp_*
