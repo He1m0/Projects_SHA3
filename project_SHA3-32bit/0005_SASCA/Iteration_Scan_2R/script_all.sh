@@ -23,6 +23,7 @@ fi
 if [ ! -x "${PYTHON_BIN}" ]; then
 	PYTHON_BIN="python3"
 fi
+
 ./init.sh
 "${PYTHON_BIN}" Iteration_scan.py ${lower} ${upper}
 "${PYTHON_BIN}" get_results.py ${lower} ${upper}

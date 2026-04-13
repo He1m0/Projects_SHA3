@@ -23,6 +23,7 @@ fi
 if [ ! -x "${PYTHON_BIN}" ]; then
 	PYTHON_BIN="python3"
 fi
+
 ./init.sh
 "${PYTHON_BIN}" get_tables.py ${lower} ${upper}
 ./pack.sh

@@ -31,8 +31,8 @@ def processing(input_name, output_dir, L, U):
   print('================================================================')
   print(input_name)
   strings = np.load(input_name)
-  upper = min(U, len(strings))
-  for t in range(L, upper):
+  U = min(U, len(strings))
+  for t in range(L, U):
     print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
     my_string = strings[t]
     print('#'+str(t).zfill(4)+': '+my_string)
@@ -41,11 +41,7 @@ def processing(input_name, output_dir, L, U):
   return
 
 if __name__=='__main__':
-  if len(sys.argv)>=3:
-    lower = int(sys.argv[1])
-    upper = int(sys.argv[2])
-  else:
-    lower = 0
-    upper = 1000
+  lower = int(sys.argv[1])
+  upper = int(sys.argv[2])
   processing('Invocation_IO/trace_input.npy',        'answer_bit/answers_INP/', lower, upper)
   processing('Invocation_IO/intermediate_H_A00.npy', 'answer_bit/answers_A00/', lower, upper)

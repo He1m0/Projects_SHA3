@@ -1,6 +1,20 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "${SCRIPT_DIR}" || exit 1
 
+cfg_eval() {
+	python3 - <<'PY'
+import os
+import sys
+sys.path.append(os.path.abspath('../../'))
+import global_config as gc
+print(gc.SASCA_TEMPLATE_TAG + ' ' + gc.SASCA_ICS_TAG)
+PY
+}
+
+set -- $(cfg_eval)
+SASCA_TEMPLATE_TAG="$1"
+SASCA_ICS_TAG="$2"
+
 mkdir -p Bit_Tables/
 mkdir -p Bit_Tables/Tables_INP/
 mkdir -p Bit_Tables/Tables_A00/
@@ -19,17 +33,6 @@ mkdir -p Bit_Tables/Tables_D00/
 mkdir -p Bit_Tables/Tables_D01/
 mkdir -p Bit_Tables/Tables_D02/
 mkdir -p Bit_Tables/Tables_D03/
-TAGS=$(python3 - <<'PY'
-import os
-import sys
-sys.path.append(os.path.abspath('../../'))
-import global_config as gc
-print(gc.SASCA_TEMPLATE_TAG, gc.SASCA_ICS_TAG)
-PY
-)
-set -- ${TAGS}
-template_tag=$1
-ics_tag=$2
-unzip -o -q ../../0002_detection/Code_extract_ics/ics_original_${ics_tag}.zip
-unzip -o -q ../../0003_training/template_profiling_bytes/templateLDA_O${template_tag}.zip
-unzip -o -q ../get_answers/answer_bit.zip
+unzip -qo ../../0002_detection/Code_extract_ics/ics_original_${SASCA_ICS_TAG}.zip
+unzip -qo ../../0003_training/template_profiling_bytes/templateLDA_O${SASCA_TEMPLATE_TAG}.zip
+unzip -qo ../get_answers/answer_bit.zip
