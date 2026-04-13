@@ -22,7 +22,7 @@ SET_NUM = cfg.TRAINING_SET_COUNT
 SET_SIZE = cfg.INPUTS*cfg.INVOCATIONS
 Total_Tnum = SET_NUM*SET_SIZE
 
-Bits = np.matrix(np.load('Bits.npy')[:,0:8])
+Bits = np.load('Bits.npy')[:,0:8]
 
 def profiling_byte(tag, Re_Traces, byte):
   print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')

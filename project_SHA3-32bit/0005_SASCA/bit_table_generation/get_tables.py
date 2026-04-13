@@ -5,15 +5,43 @@ import os
 import serv_manager as svm
 import marginalization
 import h5py
+sys.path.append(os.path.abspath('../../'))
+import global_config as gc
 
-PPC = 10
+PPC = gc.SASCA_PPC
+
+
+def require_exists(path, help_text):
+  if not os.path.exists(path):
+    raise FileNotFoundError(
+      "Missing required input: {}\n{}".format(path, help_text)
+    )
+
+
+def preflight_checks():
+  require_exists(
+    'answer_bit/answers_INP',
+    'Run ./init.sh in 0005_SASCA/bit_table_generation to unpack answer bits.'
+  )
+  require_exists(
+    'ics_original_'+gc.SASCA_ICS_TAG,
+    'Missing ICS folder for selected tag. Check SHA3_SASCA_ICS_TAG and rerun ./init.sh.'
+  )
+  require_exists(
+    'templateLDA_O'+gc.SASCA_TEMPLATE_TAG,
+    'Missing template folder for selected tag. Check SHA3_SASCA_TEMPLATE_TAG and rerun ./init.sh.'
+  )
+  require_exists(
+    '../../0004_validation/Processed_HDF5/part_00.hdf5',
+    'Validation traces are missing. Rebuild 0004 validation outputs before running 0005.'
+  )
 
 class Template:
   def __init__(self, func):
     self.Marginalizer = marginalization.Marginalization(8, False)
     if (func[0]=='A')or(func[0]=='B')or(func[0]=='C')or(func[0]=='D'):
       if (int(func[1:3])>=0)or(int(func[1:3])<24):
-        label = 'ics_original_010/ics_'+func+'_i'
+        label = 'ics_original_'+gc.SASCA_ICS_TAG+'/ics_'+func+'_i'
       else:
         print(('Class init error: '+func))
         sys.exit()
@@ -27,7 +55,7 @@ class Template:
     self.name = func
     print(('Initializing '+self.name))
     self.ICs = []
-    fname = 'templateLDA_O010/template_'+func+'/template'
+    fname = 'templateLDA_O'+gc.SASCA_TEMPLATE_TAG+'/template_'+func+'/template'
     self.INV = []
     self.EXP = []
     self.AVE = []
@@ -75,6 +103,7 @@ def answer_to_table(answer_bits):
   return np.vstack([(1.0-table_O), table_O])
 
 def main(L, U):
+  preflight_checks()
   Template_A00 = Template('A00')
   Template_A01 = Template('A01')
   Template_A02 = Template('A02')
