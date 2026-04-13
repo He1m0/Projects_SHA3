@@ -2,16 +2,20 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from pathlib import Path
 
-sys.path.append(os.path.abspath('../../'))
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
 import global_config as gc
 
-total = float(gc.SASCA_TRACE_COUNT)
-Total = {'4': total, '3': total, '2': total}
-X_NUM = 8*np.array((range(0, 201)))
+TOTAL = float(gc.SASCA_TRACE_COUNT)
+X_NUM = gc.SASCA_RATE_STEP_BITS*np.array((range(0, gc.SASCA_RATE_POINT_COUNT)))
 def get_data(rd):
   fname = '../Rate_Scan_'+str(rd)+'R/rate_scan_'+str(rd)+'R_B.npy'
-  Y = 100.0*(np.load(fname)/Total[str(rd)])
+  Y = 100.0*(np.load(fname)/TOTAL)
   return X_NUM, Y
 
 def plot(Interval, if_show=False):
@@ -19,7 +23,7 @@ def plot(Interval, if_show=False):
   for R in Interval:
     X, Y = get_data(R)
     plt.plot(X, Y, label=(str(R)+' rounds'))
-  pic.set_xlim([0,1600])
+  pic.set_xlim([0, int(X_NUM[-1]) if len(X_NUM)>0 else 1600])
   pic.set_ylim([-0.5,100.5])
   pic.set_xlabel('#Rate (unknown) bits')
   pic.set_ylabel('%Recovered traces')

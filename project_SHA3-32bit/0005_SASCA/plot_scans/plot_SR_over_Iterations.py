@@ -2,16 +2,20 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from pathlib import Path
 
-sys.path.append(os.path.abspath('../../'))
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
 import global_config as gc
 
-total = float(gc.SASCA_TRACE_COUNT)
-Total = {'4': total, '3': total, '2': total}
-X_NUM = np.array(range(0, 41))
+TOTAL = float(gc.SASCA_TRACE_COUNT)
+X_NUM = np.array(range(0, gc.SASCA_ITERATION_COUNT+1))
 def get_data(rd):
   fname = '../Iteration_Scan_'+str(rd)+'R/iteration_scan_'+str(rd)+'R_B.npy'
-  Y = 100.0*(np.load(fname)/Total[str(rd)])
+  Y = 100.0*(np.load(fname)/TOTAL)
   return X_NUM, Y
 
 def plot(Interval, if_show=False):
@@ -19,7 +23,7 @@ def plot(Interval, if_show=False):
   for R in Interval:
     X, Y = get_data(R)
     plt.plot(X, Y, label=(str(R)+' rounds'))
-  pic.set_xlim([0,40])
+  pic.set_xlim([0, gc.SASCA_ITERATION_COUNT])
   pic.set_ylim([-0.5,100.5])
   pic.set_xlabel('#Iteration')
   pic.set_ylabel('%Recovered traces')
