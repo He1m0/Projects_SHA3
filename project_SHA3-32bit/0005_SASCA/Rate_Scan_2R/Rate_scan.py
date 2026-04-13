@@ -4,12 +4,23 @@ import serv_manager as svm
 import os
 import sys
 import time
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+import global_config as gc
 
 ###################################################################################
 # Independent parameters
 # Rounds:
 ROUND = 2
 Dir_Table = 'Bit_Tables/'
+ALLOWED_WRONG_BITS = gc.SASCA_ALLOWED_WRONG_BITS
+RATE_POINT_COUNT = gc.SASCA_RATE_POINT_COUNT
+RATE_STEP_BITS = gc.SASCA_RATE_STEP_BITS
 ###################################################################################
 
 def get_prediction(Table):
@@ -39,15 +50,24 @@ def loopy_BP_scan(tr):
   answer = svm.Load('answer_bit/answers_A00/ans_bit_'+str(tr).zfill(4)+'.npy')
   #print('Loopy-BP processing...')
   Results = []
-  for byte in range(0, 201):
+  best_wrong_bits = 1600
+  for byte in range(0, RATE_POINT_COUNT):
     #print('  ================================================')
-    rate = byte*8
+    rate = min(byte*RATE_STEP_BITS, 1600)
     b_INP = np.hstack([0.5*np.ones((2, rate)), b_ALL[:,rate:]])
     A00_table = SASCA_scan.State_Scan(ROUND, b_INP, np.array(b_C), np.array(b_D), np.array(b_A), np.array(b_B))
     prediction = get_prediction(A00_table)
-    check = (np.count_nonzero(prediction==answer)==1600)
-    #print('  rate '+str(rate).zfill(4)+':', check)
+    wrong_bits = int(np.count_nonzero(prediction!=answer))
+    if wrong_bits<best_wrong_bits:
+      best_wrong_bits = wrong_bits
+    check = (wrong_bits<=ALLOWED_WRONG_BITS)
+    if (byte%25==0) or (byte==RATE_POINT_COUNT-1):
+      print('  rate={:4d} bits: wrong_bits={}, success={}'.format(rate, wrong_bits, check))
     Results.append(check)
+  success_total = int(np.count_nonzero(Results))
+  print('Trace {} summary: best_wrong_bits={}, success_count={}/{}'.format(
+    str(tr).zfill(4), best_wrong_bits, success_total, RATE_POINT_COUNT
+  ))
   print('Saving results')
   svm.Save(('Success/success_'+str(tr).zfill(4)+'.npy'), Results)
   return

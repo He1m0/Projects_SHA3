@@ -4,8 +4,16 @@ import os
 import time
 import serv_manager as svm
 import SASCA_XR
+from pathlib import Path
 
-it_n = 40
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+import global_config as gc
+
+it_n = gc.SASCA_ITERATION_COUNT
 
 def get_prediction(Table):
   State = np.zeros((1600), dtype=np.int32)

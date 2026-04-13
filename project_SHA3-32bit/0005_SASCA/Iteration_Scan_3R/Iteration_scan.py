@@ -4,12 +4,21 @@ import serv_manager as svm
 import os
 import sys
 import time
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+import global_config as gc
 
 ###################################################################################
 # Independent parameters
 # Rounds:
 ROUND = 3
 Dir_Table = 'Bit_Tables/'
+ALLOWED_WRONG_BITS = gc.SASCA_ALLOWED_WRONG_BITS
 ###################################################################################
 
 def loopy_BP_scan(tr):
@@ -30,11 +39,14 @@ def loopy_BP_scan(tr):
   answer = svm.Load('answer_bit/answers_A00/ans_bit_'+str(tr).zfill(4)+'.npy')
   #print('Loopy-BP processing...')
   #print('  ================================================')
-  rate = 1600-(512*2)
+  rate = gc.SASCA_KNOWN_RATE_BITS
   b_INP = np.hstack([0.5*np.ones((2, rate)), b_ALL[:,rate:]])
   Predictions = SASCA_iteration_scan.State_Scan(ROUND, b_INP, np.array(b_C), np.array(b_D), np.array(b_A), np.array(b_B))
-  Success = (Predictions==answer).all(axis=1)
-  print(Success)
+  wrong_bits = np.count_nonzero(Predictions!=answer, axis=1)
+  Success = (wrong_bits<=ALLOWED_WRONG_BITS)
+  print('Trace {} summary: best_wrong_bits={}, final_wrong_bits={}, success_count={}/{}'.format(
+    str(tr).zfill(4), int(np.min(wrong_bits)), int(wrong_bits[-1]), int(np.count_nonzero(Success)), len(Success)
+  ))
   print('Saving results')
   svm.Save(('Success/success_'+str(tr).zfill(4)+'.npy'), Success)
   return

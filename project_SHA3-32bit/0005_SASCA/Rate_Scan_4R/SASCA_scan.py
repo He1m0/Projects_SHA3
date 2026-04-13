@@ -5,8 +5,16 @@ import time
 import serv_manager as svm
 import SASCA_XR
 import prob_scan as Prob
+from pathlib import Path
 
-it_n = 200
+ROOT_DIR = Path(__file__).resolve()
+while not (ROOT_DIR / "global_config.py").exists() and ROOT_DIR != ROOT_DIR.parent:
+  ROOT_DIR = ROOT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+  sys.path.insert(0, str(ROOT_DIR))
+import global_config as gc
+
+it_n = gc.SASCA_RATE_BP_ITERATION_COUNT
 
 def State_Scan(RD, INPt, T_C, T_D, T_A, T_B):
   It_Record = 0
