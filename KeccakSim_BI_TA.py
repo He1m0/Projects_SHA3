@@ -65,6 +65,7 @@ class KeccakTraceSimulator:
         hw_scale=1.0,
         common_wave_scale=0.0,
         common_wave_period=256,
+        leakage_profile="full",
         rng_seed=None,
     ):
         """Constructor for KeccakTraceSimulator with optional realism controls."""
@@ -78,6 +79,19 @@ class KeccakTraceSimulator:
         self.hw_scale = float(hw_scale)
         self.common_wave_scale = float(common_wave_scale)
         self.common_wave_period = max(1, int(common_wave_period))
+        self.leakage_profile = str(leakage_profile).strip().lower()
+        if self.leakage_profile == "full":
+            self.leak_bit_interleaving = True
+            self.leak_memory_moves = True
+            self.leak_permutation_moves = True
+            self.leak_init = True
+        elif self.leakage_profile in ("focused", "logic-only"):
+            self.leak_bit_interleaving = False
+            self.leak_memory_moves = False
+            self.leak_permutation_moves = False
+            self.leak_init = False
+        else:
+            raise ValueError("Unsupported leakage_profile: {}".format(leakage_profile))
         self.rng = np.random.default_rng(rng_seed)
         self.trace_gain = 1.0
         self.trace_offset = 0.0
@@ -286,6 +300,8 @@ class KeccakTraceSimulator:
     
     def leak_toBitInterleaving(self, laneLow, laneHigh):
         """Function to convert two 32-bit halves into two 32-bit interleaved words with simulated leakage."""
+        if not self.leak_bit_interleaving:
+            return self.toBitInterleaving(laneLow, laneHigh)
         laneLow = int(laneLow)
         laneHigh = int(laneHigh)
         even = 0
@@ -322,6 +338,8 @@ class KeccakTraceSimulator:
     
     def leak_fromBitInterleaving(self, even_in, odd_in):
         """Function to convert two 32-bit interleaved words back into low/high 32-bit halves with simulated leakage."""
+        if not self.leak_bit_interleaving:
+            return self.fromBitInterleaving(even_in, odd_in)
         even_in = int(even_in)
         odd_in = int(odd_in)
         laneLow = 0
@@ -422,6 +440,9 @@ class KeccakTraceSimulator:
 
     def leak_pi(self, State):
         """Function to perform the Pi step of the Keccak permutation on the given State with simulated leakage in-place."""
+        if not self.leak_permutation_moves:
+            self.pi(State)
+            return
         state_check = None
         if DEBUG:
             state_check = np.array(State, dtype=np.uint32, copy=True)
@@ -505,6 +526,9 @@ class KeccakTraceSimulator:
 
     def leak_KeccakP1600_AddBytesInLane(self, State, lanePosition, data, dataOffset, offset, length):
         """Function to add bytes to a specific lane in the State with simulated leakage."""
+        if not self.leak_memory_moves:
+            self.KeccakP1600_AddBytesInLane(State, lanePosition, data, dataOffset, offset, length)
+            return
         if (lanePosition < 25) and (offset < 8) and (offset + length <= 8):
             laneAsBytes = np.zeros(8, dtype=np.uint8)
             LOW, HIGH = 0, 0
@@ -568,6 +592,9 @@ class KeccakTraceSimulator:
 
     def leak_KeccakP1600_ExtractBytesInLane(self, State, lanePosition, data, dataOffset, offset, length):
         """Function to extract bytes from a specific lane in the State with simulated leakage."""
+        if not self.leak_memory_moves:
+            self.KeccakP1600_ExtractBytesInLane(State, lanePosition, data, dataOffset, offset, length)
+            return
         if (lanePosition < 25) and (offset < 8) and (offset + length <= 8):
             lane = np.zeros(2, dtype=np.uint32)
             laneAsBytes = np.zeros(8, dtype=np.uint8)
@@ -627,6 +654,9 @@ class KeccakTraceSimulator:
 
     def leak_KeccakP1600_ExtractAndAddBytesInLane(self, State, lanePosition, input, inputOffset, output, outputOffset, offset, length):
         """Function to extract bytes from a specific lane in the State and add them to the input data with simulated leakage."""
+        if not self.leak_memory_moves:
+            self.KeccakP1600_ExtractAndAddBytesInLane(State, lanePosition, input, inputOffset, output, outputOffset, offset, length)
+            return
         if ((lanePosition < 25) and (offset < 8) and (offset + length <= 8)):
             laneAsBytes = np.zeros(8, dtype=np.uint8)
             self.leak_KeccakP1600_ExtractBytesInLane(State, lanePosition, laneAsBytes, 0, offset, length)
@@ -689,6 +719,9 @@ class KeccakTraceSimulator:
 
     def leak_KeccakP1600_OverwriteBytesInLane(self, State, lanePosition, data, dataOffset, offset, length):
         """Function to overwrite bytes in a specific lane in the State with simulated leakage."""
+        if not self.leak_memory_moves:
+            self.KeccakP1600_OverwriteBytesInLane(State, lanePosition, data, dataOffset, offset, length)
+            return
         if (lanePosition < 25) and (offset < 8) and (offset + length <= 8):
             laneAsBytes = np.zeros(8, dtype=np.uint8)
             LOW, HIGH = 0, 0
@@ -750,6 +783,9 @@ class KeccakTraceSimulator:
 
     def leak_KeccakP1600_OverwriteWithZeroes(self, State, byteCount):
         """Function to overwrite bytes in the State with zeroes with simulated leakage."""
+        if not self.leak_memory_moves:
+            self.KeccakP1600_OverwriteWithZeroes(State, byteCount)
+            return
         laneAsBytes = np.zeros(8, dtype=np.uint8)
         lanePosition = 0
 
@@ -798,6 +834,9 @@ class KeccakTraceSimulator:
 
     def leak_KeccakP1600_Initialize(self, State):
         """Function to initialize the State in-place with simulated leakage by setting all lanes to zero."""
+        if not self.leak_init:
+            self.KeccakP1600_Initialize(State)
+            return
         for i in range(50):
             State[i] = self.leak(0)
     
@@ -1259,6 +1298,12 @@ def _build_cli_parser():
         help="Period (in samples) of common-mode waveform (default: 256)",
     )
     parser.add_argument(
+        "--leakage-profile",
+        choices=["full", "focused", "logic-only"],
+        default="full",
+        help="Leakage source profile: full or focused/logic-only (default: full)",
+    )
+    parser.add_argument(
         "--corr-probe-traces",
         type=int,
         default=0,
@@ -1489,6 +1534,7 @@ def main():
         hw_scale=args.hw_scale,
         common_wave_scale=args.common_wave_scale,
         common_wave_period=args.common_wave_period,
+        leakage_profile=args.leakage_profile,
         rng_seed=args.bulk_seed,
     )
 
