@@ -240,12 +240,7 @@ simulate_group() {
     --bulk-seed "${SEED}" \
     --leakage-profile "${SIM_LEAKAGE_PROFILE:-full}" \
     --common-wave-scope "${SIM_COMMON_WAVE_SCOPE:-invocation}" \
-    --hw-ratio "${SIM_HW_RATIO:-0.65}" \
-    --theta-leak-scale "${SIM_THETA_LEAK_SCALE:-1.0}" \
-    --rho-leak-scale "${SIM_RHO_LEAK_SCALE:-1.0}" \
-    --pi-leak-scale "${SIM_PI_LEAK_SCALE:-1.0}" \
-    --chi-leak-scale "${SIM_CHI_LEAK_SCALE:-1.0}" \
-    --iota-leak-scale "${SIM_IOTA_LEAK_SCALE:-1.0}"
+    --hw-ratio "${SIM_HW_RATIO:-0.65}"
 
   log "ZIP  : ${GROUP}"
   zip_sim_dirs "${BASE_DIR}" "Raw_${GROUP}"
