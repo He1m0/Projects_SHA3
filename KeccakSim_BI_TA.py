@@ -62,6 +62,9 @@ class KeccakTraceSimulator:
         gain_jitter_sigma=0.0,
         offset_jitter_sigma=0.0,
         smooth_window=1,
+        hw_scale=1.0,
+        common_wave_scale=0.0,
+        common_wave_period=256,
         rng_seed=None,
     ):
         """Constructor for KeccakTraceSimulator with optional realism controls."""
@@ -72,9 +75,13 @@ class KeccakTraceSimulator:
         self.gain_jitter_sigma = float(gain_jitter_sigma)
         self.offset_jitter_sigma = float(offset_jitter_sigma)
         self.smooth_window = max(1, int(smooth_window))
+        self.hw_scale = float(hw_scale)
+        self.common_wave_scale = float(common_wave_scale)
+        self.common_wave_period = max(1, int(common_wave_period))
         self.rng = np.random.default_rng(rng_seed)
         self.trace_gain = 1.0
         self.trace_offset = 0.0
+        self.sample_index = 0
         self._resample_trace_transform()
 
     def _resample_trace_transform(self):
@@ -103,6 +110,7 @@ class KeccakTraceSimulator:
         """Resets the trace to an empty list."""
         self.trace = []
         self.invocation_trace_ranges = []
+        self.sample_index = 0
         self._resample_trace_transform()
 
     def write_trace_values_to_file(self, trace_values, file_path, separator="\n", append=False, trace_format="text", trace_dtype="int16"):
@@ -161,7 +169,15 @@ class KeccakTraceSimulator:
         """Function to simulate leakage of a value. Computes the Hamming Weight, adds noise, appends to trace, and returns the value."""
         value = int(value)
         hw = self.get_hw(value)
-        self.trace.append(hw + self.get_noise())
+        # Data-dependent term centered around average HW(32-bit)=16 to allow scaling its influence.
+        sample_value = 16.0 + self.hw_scale * (float(hw) - 16.0)
+        # Optional deterministic common-mode waveform to model instruction-level shared shape.
+        if self.common_wave_scale != 0.0:
+            phase = (2.0 * np.pi * float(self.sample_index)) / float(self.common_wave_period)
+            sample_value += self.common_wave_scale * (np.sin(phase) + 0.35 * np.sin((3.0 * phase) + 0.4))
+        sample_value += self.get_noise()
+        self.trace.append(sample_value)
+        self.sample_index += 1
         return value
 
     # --- leaky 32-bit Logic Primitives ---
@@ -1225,6 +1241,30 @@ def _build_cli_parser():
         help="Moving-average window length applied to each generated trace (default: 1 = disabled)",
     )
     parser.add_argument(
+        "--hw-scale",
+        type=float,
+        default=1.0,
+        help="Scale for data-dependent HW term (default: 1.0)",
+    )
+    parser.add_argument(
+        "--common-wave-scale",
+        type=float,
+        default=0.0,
+        help="Scale for deterministic common-mode waveform added to each sample (default: 0.0)",
+    )
+    parser.add_argument(
+        "--common-wave-period",
+        type=int,
+        default=256,
+        help="Period (in samples) of common-mode waveform (default: 256)",
+    )
+    parser.add_argument(
+        "--corr-probe-traces",
+        type=int,
+        default=0,
+        help="Generate N traces and report corr statistics against the first trace (debug/tuning mode)",
+    )
+    parser.add_argument(
         "--bulk-count",
         type=int,
         default=0,
@@ -1394,6 +1434,48 @@ def _derive_random_input_bytes_for_invocations(algo, invocations):
     return (invocations - 1) * rate_in_bytes
 
 
+def _run_corr_probe(simulator, algo, args, parser):
+    if args.corr_probe_traces <= 1:
+        parser.error("--corr-probe-traces must be > 1")
+    if not args.trace:
+        parser.error("--corr-probe-traces requires --trace")
+    if algo in ("shake128", "shake256"):
+        parser.error("--corr-probe-traces is currently implemented only for SHA3 algorithms")
+
+    probe_input_bytes = args.random_input_bytes
+    if args.bulk_invocations is not None:
+        try:
+            probe_input_bytes = _derive_random_input_bytes_for_invocations(algo, args.bulk_invocations)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+    rng = np.random.default_rng(args.bulk_seed)
+    ref_trace = None
+    corrs = []
+    for _ in range(args.corr_probe_traces):
+        msg_bytes = rng.integers(0, 256, size=probe_input_bytes, dtype=np.uint8).tobytes()
+        message_hex = msg_bytes.hex()
+        _, trace = _run_single(simulator, algo, message_hex, args, trace_output_file=None)
+        arr = np.asarray(trace, dtype=np.float64)
+        if ref_trace is None:
+            ref_trace = arr
+            continue
+        if len(arr) != len(ref_trace):
+            parser.error("Correlation probe got inconsistent trace lengths")
+        corrs.append(float(np.corrcoef(arr, ref_trace)[0][1]))
+
+    corr_array = np.asarray(corrs, dtype=np.float64)
+    print("corr_probe_trace_len={}".format(len(ref_trace)))
+    print("corr_probe_count={}".format(len(corr_array)))
+    print("corr_probe_mean={:.6f}".format(float(np.mean(corr_array))))
+    print("corr_probe_std={:.6f}".format(float(np.std(corr_array))))
+    print("corr_probe_min={:.6f}".format(float(np.min(corr_array))))
+    print("corr_probe_p05={:.6f}".format(float(np.percentile(corr_array, 5.0))))
+    print("corr_probe_median={:.6f}".format(float(np.median(corr_array))))
+    print("corr_probe_p95={:.6f}".format(float(np.percentile(corr_array, 95.0))))
+    print("corr_probe_max={:.6f}".format(float(np.max(corr_array))))
+
+
 def main():
     parser = _build_cli_parser()
     args = parser.parse_args()
@@ -1404,6 +1486,9 @@ def main():
         gain_jitter_sigma=args.gain_jitter_sigma,
         offset_jitter_sigma=args.offset_jitter_sigma,
         smooth_window=args.smooth_window,
+        hw_scale=args.hw_scale,
+        common_wave_scale=args.common_wave_scale,
+        common_wave_period=args.common_wave_period,
         rng_seed=args.bulk_seed,
     )
 
@@ -1423,6 +1508,12 @@ def main():
 
     if args.smooth_window <= 0:
         parser.error("--smooth-window must be >= 1")
+
+    if args.common_wave_period <= 0:
+        parser.error("--common-wave-period must be >= 1")
+
+    if args.corr_probe_traces < 0:
+        parser.error("--corr-probe-traces must be >= 0")
 
     if args.bulk_count < 0:
         parser.error("--bulk-count must be >= 0")
@@ -1451,6 +1542,10 @@ def main():
         or args.bulk_total_traces is not None
         or args.bulk_count > 0
     )
+
+    if args.corr_probe_traces > 0:
+        _run_corr_probe(simulator, algo, args, parser)
+        return 0
 
     if bulk_mode_requested:
         if not args.trace:
