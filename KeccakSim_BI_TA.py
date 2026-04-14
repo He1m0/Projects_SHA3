@@ -65,6 +65,7 @@ class KeccakTraceSimulator:
         hw_scale=1.0,
         common_wave_scale=0.0,
         common_wave_period=256,
+        hw_ratio=None,
         leakage_profile="full",
         rng_seed=None,
     ):
@@ -76,8 +77,15 @@ class KeccakTraceSimulator:
         self.gain_jitter_sigma = float(gain_jitter_sigma)
         self.offset_jitter_sigma = float(offset_jitter_sigma)
         self.smooth_window = max(1, int(smooth_window))
+        # Backward-compatible mode: explicit scales.
         self.hw_scale = float(hw_scale)
         self.common_wave_scale = float(common_wave_scale)
+        # Optional single-knob mode: relative contribution ratio.
+        self.hw_ratio = None
+        if hw_ratio is not None:
+            self.hw_ratio = min(max(float(hw_ratio), 0.0), 1.0)
+            self.hw_scale = self.hw_ratio
+            self.common_wave_scale = 1.0 - self.hw_ratio
         self.common_wave_period = max(1, int(common_wave_period))
         self.leakage_profile = str(leakage_profile).strip().lower()
         if self.leakage_profile == "full":
@@ -1298,6 +1306,12 @@ def _build_cli_parser():
         help="Period (in samples) of common-mode waveform (default: 256)",
     )
     parser.add_argument(
+        "--hw-ratio",
+        type=float,
+        default=None,
+        help="Optional single-knob mix: HW contribution ratio in [0,1]; common-wave ratio is (1-ratio)",
+    )
+    parser.add_argument(
         "--leakage-profile",
         choices=["full", "focused", "logic-only"],
         default="full",
@@ -1534,6 +1548,7 @@ def main():
         hw_scale=args.hw_scale,
         common_wave_scale=args.common_wave_scale,
         common_wave_period=args.common_wave_period,
+        hw_ratio=args.hw_ratio,
         leakage_profile=args.leakage_profile,
         rng_seed=args.bulk_seed,
     )
@@ -1557,6 +1572,9 @@ def main():
 
     if args.common_wave_period <= 0:
         parser.error("--common-wave-period must be >= 1")
+
+    if args.hw_ratio is not None and (args.hw_ratio < 0.0 or args.hw_ratio > 1.0):
+        parser.error("--hw-ratio must be within [0,1]")
 
     if args.corr_probe_traces < 0:
         parser.error("--corr-probe-traces must be >= 0")
