@@ -48,25 +48,55 @@ def loopy_BP_scan(tr):
     b_B.append(svm.Load((Dir_Table+'Tables_B'+str(rd).zfill(2)+'/table_'+str(tr).zfill(4)+'.npy')))
   #print('Loading answer...')
   answer = svm.Load('answer_bit/answers_A00/ans_bit_'+str(tr).zfill(4)+'.npy')
+  answer_len = int(answer.shape[0])
   #print('Loopy-BP processing...')
   Results = []
-  best_wrong_bits = 1600
+  best_wrong_bits = answer_len
+  final_wrong_bits = answer_len
+  final_unknown_wrong = answer_len
+  final_known_wrong = answer_len
   for byte in range(0, RATE_POINT_COUNT):
     #print('  ================================================')
-    rate = min(byte*RATE_STEP_BITS, 1600)
-    b_INP = np.hstack([0.5*np.ones((2, rate)), b_ALL[:,rate:]])
+    unknown_bits = min(byte*RATE_STEP_BITS, answer_len)
+    b_INP = np.hstack([0.5*np.ones((2, unknown_bits)), b_ALL[:,unknown_bits:]])
     A00_table = SASCA_scan.State_Scan(ROUND, b_INP, np.array(b_C), np.array(b_D), np.array(b_A), np.array(b_B))
     prediction = get_prediction(A00_table)
-    wrong_bits = int(np.count_nonzero(prediction!=answer))
+    diff = (prediction != answer)
+    wrong_bits = int(np.count_nonzero(diff))
+    wrong_unknown = int(np.count_nonzero(diff[:unknown_bits]))
+    wrong_known = int(np.count_nonzero(diff[unknown_bits:]))
     if wrong_bits<best_wrong_bits:
       best_wrong_bits = wrong_bits
+    final_wrong_bits = wrong_bits
+    final_unknown_wrong = wrong_unknown
+    final_known_wrong = wrong_known
     check = (wrong_bits<=ALLOWED_WRONG_BITS)
     if (byte%25==0) or (byte==RATE_POINT_COUNT-1):
-      print('  rate={:4d} bits: wrong_bits={}, success={}'.format(rate, wrong_bits, check))
+      print('  unknown_bits={:4d}, known_bits={:4d}: wrong_bits={}, ber={:.4f}, wrong_unknown={}/{}, wrong_known={}/{}, success={}'.format(
+        unknown_bits,
+        answer_len-unknown_bits,
+        wrong_bits,
+        float(wrong_bits)/float(answer_len),
+        wrong_unknown,
+        unknown_bits,
+        wrong_known,
+        answer_len-unknown_bits,
+        check
+      ))
     Results.append(check)
   success_total = int(np.count_nonzero(Results))
-  print('Trace {} summary: best_wrong_bits={}, success_count={}/{}'.format(
-    str(tr).zfill(4), best_wrong_bits, success_total, RATE_POINT_COUNT
+  print('Trace {} summary: best_wrong_bits={}, final_wrong_bits={}, best_ber={:.4f}, final_ber={:.4f}, final_unknown_wrong={}/{}, final_known_wrong={}/{}, success_count={}/{}'.format(
+    str(tr).zfill(4),
+    best_wrong_bits,
+    final_wrong_bits,
+    float(best_wrong_bits)/float(answer_len),
+    float(final_wrong_bits)/float(answer_len),
+    final_unknown_wrong,
+    min((RATE_POINT_COUNT-1)*RATE_STEP_BITS, answer_len),
+    final_known_wrong,
+    answer_len-min((RATE_POINT_COUNT-1)*RATE_STEP_BITS, answer_len),
+    success_total,
+    RATE_POINT_COUNT
   ))
   print('Saving results')
   svm.Save(('Success/success_'+str(tr).zfill(4)+'.npy'), Results)
