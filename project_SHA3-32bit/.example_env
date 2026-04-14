@@ -170,3 +170,42 @@ SHA3_SASCA_ALLOWED_WRONG_BITS=0
 # SHA3_SASCA_OUTPUT_BITS defines the digest length used to derive known-rate bits.
 # For SHA3-512 keep this at 512.
 SHA3_SASCA_OUTPUT_BITS=512
+
+# --- Simulator settings used by run_full_pipeline.sh ---
+# These variables control how KeccakSim_BI_TA.py generates raw traces for RE/DN/TR/TS.
+
+# SIM_ALGORITHM sets the hash function mode passed to the simulator.
+SIM_ALGORITHM=sha3-512
+
+# SIM_TRACE_FORMAT controls output trace format written by the simulator.
+SIM_TRACE_FORMAT=bin
+
+# SIM_TRACE_DTYPE is the numpy dtype for binary trace files.
+SIM_TRACE_DTYPE=float64
+
+# SIM_BULK_DATA_FORMAT controls format of generated data_in.npy/data_out.npy.
+SIM_BULK_DATA_FORMAT=hex
+
+# Noise/jitter parameters for leakage simulation.
+SIM_NOISE_SIGMA=0.01
+SIM_GAIN_JITTER_SIGMA=0.001
+SIM_OFFSET_JITTER_SIGMA=0.01
+SIM_SMOOTH_WINDOW=1
+
+# Leakage composition and profile controls.
+SIM_LEAKAGE_PROFILE=full
+SIM_COMMON_WAVE_SCOPE=invocation
+SIM_HW_RATIO=0.65
+
+# Optional step-specific leakage gains (1.0 keeps default behavior).
+SIM_THETA_LEAK_SCALE=1.0
+SIM_RHO_LEAK_SCALE=1.0
+SIM_PI_LEAK_SCALE=1.0
+SIM_CHI_LEAK_SCALE=1.0
+SIM_IOTA_LEAK_SCALE=1.0
+
+# Seeds per dataset group for reproducible generation.
+SIM_SEED_RE=128
+SIM_SEED_DN=256
+SIM_SEED_TR=512
+SIM_SEED_TS=1024
