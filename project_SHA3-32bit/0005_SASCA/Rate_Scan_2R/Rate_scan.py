@@ -52,9 +52,13 @@ def loopy_BP_scan(tr):
   #print('Loopy-BP processing...')
   Results = []
   best_wrong_bits = answer_len
+  best_point = 0
+  best_unknown_bits = 0
+  baseline_wrong_bits = answer_len
   final_wrong_bits = answer_len
   final_unknown_wrong = answer_len
   final_known_wrong = answer_len
+  final_unknown_bits = 0
   for byte in range(0, RATE_POINT_COUNT):
     #print('  ================================================')
     unknown_bits = min(byte*RATE_STEP_BITS, answer_len)
@@ -67,9 +71,14 @@ def loopy_BP_scan(tr):
     wrong_known = int(np.count_nonzero(diff[unknown_bits:]))
     if wrong_bits<best_wrong_bits:
       best_wrong_bits = wrong_bits
+      best_point = byte
+      best_unknown_bits = unknown_bits
+    if byte==0:
+      baseline_wrong_bits = wrong_bits
     final_wrong_bits = wrong_bits
     final_unknown_wrong = wrong_unknown
     final_known_wrong = wrong_known
+    final_unknown_bits = unknown_bits
     check = (wrong_bits<=ALLOWED_WRONG_BITS)
     if (byte%25==0) or (byte==RATE_POINT_COUNT-1):
       print('  unknown_bits={:4d}, known_bits={:4d}: wrong_bits={}, ber={:.4f}, wrong_unknown={}/{}, wrong_known={}/{}, success={}'.format(
@@ -85,16 +94,21 @@ def loopy_BP_scan(tr):
       ))
     Results.append(check)
   success_total = int(np.count_nonzero(Results))
-  print('Trace {} summary: best_wrong_bits={}, final_wrong_bits={}, best_ber={:.4f}, final_ber={:.4f}, final_unknown_wrong={}/{}, final_known_wrong={}/{}, success_count={}/{}'.format(
+  print('Trace {} summary: baseline_wrong_bits={}, best_wrong_bits={}@pt{}(unknown_bits={}), final_wrong_bits={}, best_ber={:.4f}, final_ber={:.4f}, delta_best_vs_baseline={}, delta_final_vs_baseline={}, final_unknown_wrong={}/{}, final_known_wrong={}/{}, success_count={}/{}'.format(
     str(tr).zfill(4),
+    baseline_wrong_bits,
     best_wrong_bits,
+    best_point,
+    best_unknown_bits,
     final_wrong_bits,
     float(best_wrong_bits)/float(answer_len),
     float(final_wrong_bits)/float(answer_len),
+    best_wrong_bits-baseline_wrong_bits,
+    final_wrong_bits-baseline_wrong_bits,
     final_unknown_wrong,
-    min((RATE_POINT_COUNT-1)*RATE_STEP_BITS, answer_len),
+    final_unknown_bits,
     final_known_wrong,
-    answer_len-min((RATE_POINT_COUNT-1)*RATE_STEP_BITS, answer_len),
+    answer_len-final_unknown_bits,
     success_total,
     RATE_POINT_COUNT
   ))

@@ -49,13 +49,21 @@ def loopy_BP_scan(tr):
   wrong_unknown = np.count_nonzero(diff[:, :known_rate], axis=1)
   wrong_known = np.count_nonzero(diff[:, known_rate:], axis=1)
   ber = wrong_bits.astype(np.float64) / float(answer_len)
+  best_idx = int(np.argmin(wrong_bits))
+  baseline_wrong_bits = int(wrong_bits[0])
+  final_wrong_bits = int(wrong_bits[-1])
+  best_wrong_bits = int(wrong_bits[best_idx])
   Success = (wrong_bits<=ALLOWED_WRONG_BITS)
-  print('Trace {} summary: best_wrong_bits={}, final_wrong_bits={}, best_ber={:.4f}, final_ber={:.4f}, final_unknown_wrong={}/{}, final_known_wrong={}/{}, success_count={}/{}'.format(
+  print('Trace {} summary: baseline_wrong_bits={}, best_wrong_bits={}@iter{}, final_wrong_bits={}, best_ber={:.4f}, final_ber={:.4f}, delta_best_vs_baseline={}, delta_final_vs_baseline={}, final_unknown_wrong={}/{}, final_known_wrong={}/{}, success_count={}/{}'.format(
     str(tr).zfill(4),
-    int(np.min(wrong_bits)),
-    int(wrong_bits[-1]),
+    baseline_wrong_bits,
+    best_wrong_bits,
+    best_idx,
+    final_wrong_bits,
     float(np.min(ber)),
     float(ber[-1]),
+    best_wrong_bits-baseline_wrong_bits,
+    final_wrong_bits-baseline_wrong_bits,
     int(wrong_unknown[-1]),
     int(known_rate),
     int(wrong_known[-1]),
