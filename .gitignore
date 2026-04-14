@@ -10,3 +10,4 @@ Raw*
 *.hdf5
 /traces
 tmp_*
+.env
