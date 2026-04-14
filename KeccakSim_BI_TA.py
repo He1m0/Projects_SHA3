@@ -65,6 +65,7 @@ class KeccakTraceSimulator:
         hw_scale=1.0,
         common_wave_scale=0.0,
         common_wave_period=256,
+        common_wave_scope="trace",
         hw_ratio=None,
         leakage_profile="full",
         rng_seed=None,
@@ -87,6 +88,9 @@ class KeccakTraceSimulator:
             self.hw_scale = self.hw_ratio
             self.common_wave_scale = 1.0 - self.hw_ratio
         self.common_wave_period = max(1, int(common_wave_period))
+        self.common_wave_scope = str(common_wave_scope).strip().lower()
+        if self.common_wave_scope not in ("trace", "invocation"):
+            raise ValueError("Unsupported common_wave_scope: {}".format(common_wave_scope))
         self.leakage_profile = str(leakage_profile).strip().lower()
         if self.leakage_profile == "full":
             self.leak_bit_interleaving = True
@@ -104,6 +108,7 @@ class KeccakTraceSimulator:
         self.trace_gain = 1.0
         self.trace_offset = 0.0
         self.sample_index = 0
+        self.invocation_sample_index = 0
         self._resample_trace_transform()
 
     def _resample_trace_transform(self):
@@ -133,6 +138,7 @@ class KeccakTraceSimulator:
         self.trace = []
         self.invocation_trace_ranges = []
         self.sample_index = 0
+        self.invocation_sample_index = 0
         self._resample_trace_transform()
 
     def write_trace_values_to_file(self, trace_values, file_path, separator="\n", append=False, trace_format="text", trace_dtype="int16"):
@@ -195,11 +201,15 @@ class KeccakTraceSimulator:
         sample_value = 16.0 + self.hw_scale * (float(hw) - 16.0)
         # Optional deterministic common-mode waveform to model instruction-level shared shape.
         if self.common_wave_scale != 0.0:
-            phase = (2.0 * np.pi * float(self.sample_index)) / float(self.common_wave_period)
+            wave_index = self.sample_index
+            if self.common_wave_scope == "invocation":
+                wave_index = self.invocation_sample_index
+            phase = (2.0 * np.pi * float(wave_index)) / float(self.common_wave_period)
             sample_value += self.common_wave_scale * (np.sin(phase) + 0.35 * np.sin((3.0 * phase) + 0.4))
         sample_value += self.get_noise()
         self.trace.append(sample_value)
         self.sample_index += 1
+        self.invocation_sample_index += 1
         return value
 
     # --- leaky 32-bit Logic Primitives ---
@@ -826,6 +836,7 @@ class KeccakTraceSimulator:
 
     def KeccakP1600_leak_PermutationOnWords(self, State, rounds):
         """Function to perform the Keccak permutation on the given State with simulated leakage for a specified number of rounds. It iteratively applies the Theta, Rho, Pi, Chi, and Iota transformations with simulated leakage for the specified number of rounds to compute the new State after the permutation."""
+        self.invocation_sample_index = 0
         invocation_start = len(self.trace)
         for i in range(24-rounds, 24):
             self.leak_theta(State)
@@ -1306,6 +1317,12 @@ def _build_cli_parser():
         help="Period (in samples) of common-mode waveform (default: 256)",
     )
     parser.add_argument(
+        "--common-wave-scope",
+        choices=["trace", "invocation"],
+        default="trace",
+        help="Common-wave phase scope: trace (global) or invocation (reset each permutation invocation)",
+    )
+    parser.add_argument(
         "--hw-ratio",
         type=float,
         default=None,
@@ -1548,6 +1565,7 @@ def main():
         hw_scale=args.hw_scale,
         common_wave_scale=args.common_wave_scale,
         common_wave_period=args.common_wave_period,
+        common_wave_scope=args.common_wave_scope,
         hw_ratio=args.hw_ratio,
         leakage_profile=args.leakage_profile,
         rng_seed=args.bulk_seed,
