@@ -6,12 +6,14 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 WORKSPACE_DIR="$(CDPATH= cd -- "${PROJECT_DIR}/.." && pwd)"
 SIM_SCRIPT="${WORKSPACE_DIR}/KeccakSim_BI_TA.py"
+ICS_CHECK_SCRIPT="${SCRIPT_DIR}/check_ics_archive.py"
 
 ENV_FILE="${PROJECT_DIR}/.env_debug"
 SKIP_SIM=0
 SKIP_CHAIN=0
 KEEP_LOCAL_ZIPS=0
 PARALLEL_SCANS=1
+CLI_TRACES_DIR=""
 
 if [ -x "${WORKSPACE_DIR}/.venv/bin/python" ]; then
   PATH="${WORKSPACE_DIR}/.venv/bin:${PATH}"
@@ -28,6 +30,7 @@ Usage:
 
 Options:
   --env-file PATH     Env profile to apply as project .env (default: ../.env_debug)
+  --traces-dir PATH   Explicit TRACES_DIR for this run (overrides shell env)
   --skip-sim          Skip trace simulation/zip/deploy and only run 0001-0005 chain
   --skip-chain        Only simulate+deploy traces, do not run 0001-0005 chain
   --keep-local-zips   Keep generated zip files in TRACES_DIR as copies
@@ -47,6 +50,14 @@ while [ "$#" -gt 0 ]; do
         exit 2
       fi
       ENV_FILE="$2"
+      shift 2
+      ;;
+    --traces-dir)
+      if [ "$#" -lt 2 ]; then
+        echo "Error: --traces-dir requires a path" >&2
+        exit 2
+      fi
+      CLI_TRACES_DIR="$2"
       shift 2
       ;;
     --skip-sim)
@@ -85,6 +96,11 @@ fi
 if [ ! -f "${SIM_SCRIPT}" ]; then
   echo "Error: simulator not found: ${SIM_SCRIPT}" >&2
   exit 1
+fi
+
+if [ -n "${CLI_TRACES_DIR}" ]; then
+  TRACES_DIR="${CLI_TRACES_DIR}"
+  export TRACES_DIR
 fi
 
 if [ -z "${TRACES_DIR:-}" ] && [ "$SKIP_SIM" -eq 0 ]; then
@@ -151,6 +167,30 @@ wait_for_pids() {
     echo "Error: one or more jobs failed in ${GROUP_LABEL}" >&2
     exit 1
   fi
+}
+
+validate_training_ics_archive() {
+  ICS_LEVEL_STR="$(printf '%03d' "${SHA3_TRAINING_ICS_LEVEL:-10}")"
+  ICS_ZIP="${PROJECT_DIR}/0002_detection/Code_extract_ics/ics_original_${ICS_LEVEL_STR}.zip"
+
+  if [ ! -f "${ICS_CHECK_SCRIPT}" ]; then
+    echo "Error: ICS check script not found: ${ICS_CHECK_SCRIPT}" >&2
+    exit 1
+  fi
+
+  if [ ! -f "${ICS_ZIP}" ]; then
+    echo "Error: ICS archive not found: ${ICS_ZIP}" >&2
+    exit 1
+  fi
+
+  log "CHECK: validating training ICS archive (level=${ICS_LEVEL_STR})"
+  python3 "${ICS_CHECK_SCRIPT}" \
+    --ics-zip "${ICS_ZIP}" \
+    --round-count "${SHA3_DETECTION_ROUNDS:-4}" \
+    --ab-words "${SHA3_DETECTION_ICS_WORDS_AB:-50}" \
+    --cd-words "${SHA3_DETECTION_ICS_WORDS_CD:-10}" \
+    --max-empty 0 \
+    --max-missing 0
 }
 
 zip_sim_dirs() {
@@ -269,6 +309,7 @@ simulate_group() {
 }
 
 if [ "$SKIP_SIM" -eq 0 ]; then
+  log "INFO : using TRACES_DIR=${TRACES_DIR}"
   simulate_group "RE" "${SHA3_REFERENCE_FOLDERS}" "${SHA3_INPUTS}" "${SIM_SEED_RE:-128}"
   simulate_group "DN" "${SHA3_DETECTION_SET_COUNT}" "${SHA3_INPUTS}" "${SIM_SEED_DN:-256}"
   simulate_group "TR" "${SHA3_TRAINING_SET_COUNT}" "${SHA3_INPUTS}" "${SIM_SEED_TR:-512}"
@@ -282,6 +323,7 @@ if [ "$SKIP_CHAIN" -eq 0 ]; then
   run_stage "0002 detection intermediate values" "0002_detection/Code_intermediate_values"
   run_stage "0002 detection R2" "0002_detection/Code_detection_R2"
   run_stage "0002 detection ICS extraction" "0002_detection/Code_extract_ics"
+  validate_training_ics_archive
 
   run_stage "0003 training preprocessing" "0003_training/Code_preprocessing"
   run_stage "0003 training intermediate values" "0003_training/Code_intermediate_values"
