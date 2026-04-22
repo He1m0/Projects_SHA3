@@ -116,6 +116,11 @@ set -a
 . "${ENV_FILE}"
 set +a
 
+if [ -n "${CLI_TRACES_DIR}" ]; then
+  TRACES_DIR="${CLI_TRACES_DIR}"
+  export TRACES_DIR
+fi
+
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
