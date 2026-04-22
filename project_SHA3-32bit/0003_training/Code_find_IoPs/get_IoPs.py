@@ -12,7 +12,7 @@ if str(ROOT_DIR) not in sys.path:
 
 import global_config as cfg
 
-INVOCATIONS = cfg.INVOCATIONS
+ICS_WINDOW = cfg.TRAINING_ICS_WINDOW
 PART_COUNT = cfg.TRAINING_PART_COUNT
 ICS_LEVEL = str(cfg.TRAINING_ICS_LEVEL).zfill(3)
 
@@ -42,8 +42,8 @@ class IOPS_Extractor:
       print('part '+str(part).zfill(2), time.asctime())
       IoPs_Part = []
       for it in range(0, len(ICs)):
-        L = ICs[it]*INVOCATIONS
-        U = L+INVOCATIONS
+        L = int(ICs[it])*ICS_WINDOW
+        U = L+ICS_WINDOW
         IoPs_Part.append(self.CompleteTraceFiles[part]['Traces'][:,L:U])
       IoPs.append(np.hstack(IoPs_Part))
     name_output = 'IoPs/Ints_'+Tag+'_i'+str(Num).zfill(2)+'.hdf5'

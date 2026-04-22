@@ -118,12 +118,18 @@ VALIDATION_PART_COUNT = (VALIDATION_SET_COUNT + VALIDATION_SETS_PER_PART - 1) //
 VALIDATION_TEMPLATE_TAG = str(_env_int("SHA3_VALIDATION_TEMPLATE_TAG", 10)).zfill(3)
 VALIDATION_ICS_TAG = str(_env_int("SHA3_VALIDATION_ICS_TAG", TRAINING_ICS_LEVEL)).zfill(3)
 
+# Derived resampling ratios: each detection-processed column aggregates this
+# many training/validation-processed columns. Used when translating ICS
+# indices (detection column space) into the finer training/validation grids.
+TRAINING_ICS_WINDOW = max(1, DETECTION_PPC // TRAINING_PPC)
+VALIDATION_ICS_WINDOW = max(1, DETECTION_PPC // VALIDATION_PPC)
+
 # 0005_SASCA parameters.
 VALIDATION_TRACE_COUNT = VALIDATION_SET_COUNT * VALIDATION_INPUTS * INVOCATIONS
 SASCA_TRACE_COUNT = _env_int("SHA3_SASCA_TRACE_COUNT", min(1000, VALIDATION_TRACE_COUNT))
 SASCA_TEMPLATE_TAG = str(_env_int("SHA3_SASCA_TEMPLATE_TAG", int(VALIDATION_TEMPLATE_TAG))).zfill(3)
 SASCA_ICS_TAG = str(_env_int("SHA3_SASCA_ICS_TAG", int(VALIDATION_ICS_TAG))).zfill(3)
-SASCA_PPC = _env_int("SHA3_SASCA_PPC", 10)
+SASCA_PPC = _env_int("SHA3_SASCA_PPC", VALIDATION_ICS_WINDOW)
 
 # 0005 scan controls.
 SASCA_ITERATION_COUNT = _env_int("SHA3_SASCA_ITERATION_COUNT", 40)
