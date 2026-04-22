@@ -21,6 +21,8 @@ Dir_intermediate = './intermediate_values/'
 SET_NUM = cfg.TRAINING_SET_COUNT
 SET_SIZE = cfg.INPUTS*cfg.INVOCATIONS
 Total_Tnum = SET_NUM*SET_SIZE
+LDA_DOF = cfg.TEMPLATE_LDA_DOF
+TEMPLATE_TAG = cfg.VALIDATION_TEMPLATE_TAG
 
 Bits = np.load('Bits.npy')[:,0:8]
 
@@ -60,9 +62,9 @@ def profiling_byte(tag, Re_Traces, byte):
   print('Total: ', sum(EigVLs))
   print('Compressing', time.asctime())
   Scov = np.transpose(AVectors)*Wmat*AVectors
-  Scov *= 1.0/(float(Total_Tnum-9))
+  Scov *= 1.0/(float(Total_Tnum-LDA_DOF))
   #######################################################
-  fname = './templateLDA_O010/template_'+tag+'/template'
+  fname = './templateLDA_O'+TEMPLATE_TAG+'/template_'+tag+'/template'
   Sname = fname+'_scov_b'+str(byte).zfill(3)+'.npy'
   svm.Save(Sname, np.asarray(Scov))
   Aname = fname+'_avts_b'+str(byte).zfill(3)+'.npy'

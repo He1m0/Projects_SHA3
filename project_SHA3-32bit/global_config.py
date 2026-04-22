@@ -124,6 +124,12 @@ VALIDATION_ICS_TAG = str(_env_int("SHA3_VALIDATION_ICS_TAG", TRAINING_ICS_LEVEL)
 TRAINING_ICS_WINDOW = max(1, DETECTION_PPC // TRAINING_PPC)
 VALIDATION_ICS_WINDOW = max(1, DETECTION_PPC // VALIDATION_PPC)
 
+# LDA within-class covariance degrees-of-freedom correction. The Scov
+# denominator is (Total_Tnum - TEMPLATE_LDA_DOF). Default 9 matches the
+# original paper (8 bit features + intercept); lower it for aggressive
+# covariance shrinkage, raise it to reduce trust in small-N training sets.
+TEMPLATE_LDA_DOF = _env_int("SHA3_TEMPLATE_LDA_DOF", 9)
+
 # 0005_SASCA parameters.
 VALIDATION_TRACE_COUNT = VALIDATION_SET_COUNT * VALIDATION_INPUTS * INVOCATIONS
 SASCA_TRACE_COUNT = _env_int("SHA3_SASCA_TRACE_COUNT", min(1000, VALIDATION_TRACE_COUNT))
