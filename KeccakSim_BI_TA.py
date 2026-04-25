@@ -68,7 +68,9 @@ class KeccakTraceSimulator:
         common_wave_scope="trace",
         hw_ratio=None,
         leakage_profile="full",
+        leakage_granularity="word",
         rng_seed=None,
+        seed_pbw=None,
     ):
         """Constructor for KeccakTraceSimulator with optional realism controls."""
         self.trace = []
@@ -104,6 +106,20 @@ class KeccakTraceSimulator:
             self.leak_init = False
         else:
             raise ValueError("Unsupported leakage_profile: {}".format(leakage_profile))
+        self.leakage_granularity = str(leakage_granularity).strip().lower()
+        if self.leakage_granularity not in (
+            "word", "byte", "byte-bitweighted", "word-bitweighted",
+        ):
+            raise ValueError("Unsupported leakage_granularity: {}".format(leakage_granularity))
+        # Stochastic-model (Schindler/Lemke/Paar 2005) per-bit weights. Drawn once
+        # from a seeded RNG so a run is reproducible and templates trained against
+        # one seed can be matched to data from the same seed.
+        pbw_rng = np.random.default_rng(0xB17 if seed_pbw is None else int(seed_pbw))
+        self.seed_pbw = 0xB17 if seed_pbw is None else int(seed_pbw)
+        self._pbw_byte = pbw_rng.uniform(0.3, 0.7, size=8)
+        self._pbw_word = pbw_rng.uniform(0.3, 0.7, size=32)
+        self._pbw_byte_half = float(self._pbw_byte.sum()) * 0.5
+        self._pbw_word_half = float(self._pbw_word.sum()) * 0.5
         self.rng = np.random.default_rng(rng_seed)
         self.trace_gain = 1.0
         self.trace_offset = 0.0
@@ -193,13 +209,9 @@ class KeccakTraceSimulator:
             return self.noise + float(self.rng.normal(0.0, self.noise_sigma))
         return self.noise
     
-    def leak(self, value):
-        """Function to simulate leakage of a value. Computes the Hamming Weight, adds noise, appends to trace, and returns the value."""
-        value = int(value)
-        hw = self.get_hw(value)
-        # Data-dependent term centered around average HW(32-bit)=16 to allow scaling its influence.
-        sample_value = 16.0 + self.hw_scale * (float(hw) - 16.0)
-        # Optional deterministic common-mode waveform to model instruction-level shared shape.
+    def _emit_sample(self, hw, center):
+        """Emit one leakage sample with the given centered Hamming-weight contribution."""
+        sample_value = center + self.hw_scale * (float(hw) - center)
         if self.common_wave_scale != 0.0:
             wave_index = self.sample_index
             if self.common_wave_scope == "invocation":
@@ -210,6 +222,49 @@ class KeccakTraceSimulator:
         self.trace.append(sample_value)
         self.sample_index += 1
         self.invocation_sample_index += 1
+
+    def _emit_sample_pbw(self, value, weights, w_sum_half, center):
+        """Emit one leakage sample as Σ wᵢ·bitᵢ — stochastic-model leakage that
+        distinguishes individual bits, not just Hamming weight."""
+        v = int(value)
+        n = weights.shape[0]
+        weighted = 0.0
+        for i in range(n):
+            if (v >> i) & 1:
+                weighted += weights[i]
+        sample_value = center + self.hw_scale * (weighted - w_sum_half)
+        if self.common_wave_scale != 0.0:
+            wave_index = self.sample_index
+            if self.common_wave_scope == "invocation":
+                wave_index = self.invocation_sample_index
+            phase = (2.0 * np.pi * float(wave_index)) / float(self.common_wave_period)
+            sample_value += self.common_wave_scale * (np.sin(phase) + 0.35 * np.sin((3.0 * phase) + 0.4))
+        sample_value += self.get_noise()
+        self.trace.append(sample_value)
+        self.sample_index += 1
+        self.invocation_sample_index += 1
+
+    def leak(self, value):
+        """Simulate leakage of a 32-bit value. Sample count and shape depend on leakage_granularity:
+          - 'word'              : 1 HW(uint32) sample
+          - 'byte'              : 4 HW(byte) samples
+          - 'word-bitweighted'  : 1 Σwᵢ·bitᵢ sample over 32 bits
+          - 'byte-bitweighted'  : 4 Σwᵢ·bitᵢ samples over 8 bits each
+        """
+        value = int(value) & 0xFFFFFFFF
+        g = self.leakage_granularity
+        if g == "byte":
+            for shift in (0, 8, 16, 24):
+                byte_hw = bin((value >> shift) & 0xFF).count("1")
+                self._emit_sample(byte_hw, 4.0)
+        elif g == "byte-bitweighted":
+            for shift in (0, 8, 16, 24):
+                self._emit_sample_pbw((value >> shift) & 0xFF,
+                                      self._pbw_byte, self._pbw_byte_half, 4.0)
+        elif g == "word-bitweighted":
+            self._emit_sample_pbw(value, self._pbw_word, self._pbw_word_half, 16.0)
+        else:  # "word"
+            self._emit_sample(self.get_hw(value), 16.0)
         return value
 
     # --- leaky 32-bit Logic Primitives ---
@@ -1335,6 +1390,24 @@ def _build_cli_parser():
         help="Leakage source profile: full or focused/logic-only (default: full)",
     )
     parser.add_argument(
+        "--leakage-granularity",
+        choices=["word", "byte", "byte-bitweighted", "word-bitweighted"],
+        default="word",
+        help="Per-leak() sample shape. 'word'/'byte' emit Hamming-weight only "
+             "(SR ceiling ~1/70 for byte classification). The '-bitweighted' "
+             "variants emit Σ wᵢ·bitᵢ with seeded weights wᵢ ∈ U(0.3,0.7), "
+             "matching the Schindler/Lemke/Paar stochastic model and lifting "
+             "the SR ceiling proportional to SNR. (default: word).",
+    )
+    parser.add_argument(
+        "--seed-pbw",
+        type=int,
+        default=None,
+        help="RNG seed for per-bit weights used by the '-bitweighted' "
+             "granularities. Same seed → same weights → templates trained "
+             "against one seed match data from the same seed. (default: 0xB17)",
+    )
+    parser.add_argument(
         "--corr-probe-traces",
         type=int,
         default=0,
@@ -1568,7 +1641,9 @@ def main():
         common_wave_scope=args.common_wave_scope,
         hw_ratio=args.hw_ratio,
         leakage_profile=args.leakage_profile,
+        leakage_granularity=args.leakage_granularity,
         rng_seed=args.bulk_seed,
+        seed_pbw=args.seed_pbw,
     )
 
     if args.algorithm is None:

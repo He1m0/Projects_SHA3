@@ -284,6 +284,8 @@ simulate_group() {
     --smooth-window "${SIM_SMOOTH_WINDOW:-1}" \
     --bulk-seed "${SEED}" \
     --leakage-profile "${SIM_LEAKAGE_PROFILE:-full}" \
+    --leakage-granularity "${SIM_LEAKAGE_GRANULARITY:-word}" \
+    --seed-pbw "${SIM_SEED_PBW:-2839}" \
     --common-wave-scope "${SIM_COMMON_WAVE_SCOPE:-invocation}" \
     --hw-ratio "${SIM_HW_RATIO:-0.65}"
 
