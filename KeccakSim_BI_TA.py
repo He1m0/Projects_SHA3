@@ -116,8 +116,12 @@ class KeccakTraceSimulator:
         # one seed can be matched to data from the same seed.
         pbw_rng = np.random.default_rng(0xB17 if seed_pbw is None else int(seed_pbw))
         self.seed_pbw = 0xB17 if seed_pbw is None else int(seed_pbw)
-        self._pbw_byte = pbw_rng.uniform(0.3, 0.7, size=8)
-        self._pbw_word = pbw_rng.uniform(0.3, 0.7, size=32)
+        # widerpbw: per-bit weights drawn from U(0,1) instead of U(0.3,0.7).
+        # The wider weight range gives byte-level templates more bit-level
+        # discriminability — anchor bytes hitting SR=1.0 emerge more often,
+        # which BP exploits for cross-round constraint propagation.
+        self._pbw_byte = pbw_rng.uniform(0.0, 1.0, size=8)
+        self._pbw_word = pbw_rng.uniform(0.0, 1.0, size=32)
         self._pbw_byte_half = float(self._pbw_byte.sum()) * 0.5
         self._pbw_word_half = float(self._pbw_word.sum()) * 0.5
         self.rng = np.random.default_rng(rng_seed)
@@ -1395,7 +1399,7 @@ def _build_cli_parser():
         default="word",
         help="Per-leak() sample shape. 'word'/'byte' emit Hamming-weight only "
              "(SR ceiling ~1/70 for byte classification). The '-bitweighted' "
-             "variants emit Σ wᵢ·bitᵢ with seeded weights wᵢ ∈ U(0.3,0.7), "
+             "variants emit Σ wᵢ·bitᵢ with seeded weights wᵢ ∈ U(0,1), "
              "matching the Schindler/Lemke/Paar stochastic model and lifting "
              "the SR ceiling proportional to SNR. (default: word).",
     )
