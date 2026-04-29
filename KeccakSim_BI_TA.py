@@ -71,6 +71,8 @@ class KeccakTraceSimulator:
         leakage_granularity="word",
         rng_seed=None,
         seed_pbw=None,
+        pbw_shared=False,
+        pbw_c8_range=0.5,
     ):
         """Constructor for KeccakTraceSimulator with optional realism controls."""
         self.trace = []
@@ -111,19 +113,55 @@ class KeccakTraceSimulator:
             "word", "byte", "byte-bitweighted", "word-bitweighted",
         ):
             raise ValueError("Unsupported leakage_granularity: {}".format(leakage_granularity))
-        # Stochastic-model (Schindler/Lemke/Paar 2005) per-bit weights. Drawn once
-        # from a seeded RNG so a run is reproducible and templates trained against
-        # one seed can be matched to data from the same seed.
-        pbw_rng = np.random.default_rng(0xB17 if seed_pbw is None else int(seed_pbw))
+        # Stochastic-model templates (the F_9 model in You & Kuhn 2022,
+        # Sect. 2.1; originally Schindler/Lemke/Paar 2005) build per-byte
+        # expected traces as
+        #     x_b(t) = c_8(t) + Σ_{l=0..7} b[l] · c_l(t),  c_l, c_8 ∈ ℝ^m
+        # i.e. each bit-coefficient AND the intercept is a vector of length
+        # m (one entry per sample point). Templates trained on real silicon
+        # implicitly recover this per-position structure.
+        #
+        # Two simulator modes:
+        #
+        #   pbw_shared = False (default, F_9-faithful):
+        #     For each leakage point t we lazily draw 9 independent
+        #     coefficients (c_0..c_7 ~ U(0,1) and c_8 ~ U(-c8_range, +c8_range))
+        #     from the seeded `pbw_rng`. Bytes are emitted via a per-position
+        #     256-entry LUT; words via per-position (32 weights, 1 intercept)
+        #     tuples. This is the canonical "per-leakage-point pbw" form
+        #     (advisor's LUT proposal) and matches what the templates fit.
+        #
+        #   pbw_shared = True (legacy, pre-Apr-29 behaviour):
+        #     A single 8-vector and a single 32-vector drawn once at init are
+        #     reused at every leakage point. Equivalent to enforcing
+        #     c_l(t) = c_l(t') for all t — a *collapsed* F_9. Kept solely
+        #     for reproducing pre-rework archives (smoke widerpbw / strict /
+        #     realnoise / paperscale_*) byte-identically.
+        self.pbw_shared = bool(pbw_shared)
+        self.pbw_c8_range = float(pbw_c8_range)
+        if self.pbw_c8_range < 0:
+            raise ValueError("pbw_c8_range must be >= 0 (got {})".format(pbw_c8_range))
+        self.pbw_rng = np.random.default_rng(0xB17 if seed_pbw is None else int(seed_pbw))
         self.seed_pbw = 0xB17 if seed_pbw is None else int(seed_pbw)
-        # widerpbw: per-bit weights drawn from U(0,1) instead of U(0.3,0.7).
-        # The wider weight range gives byte-level templates more bit-level
-        # discriminability — anchor bytes hitting SR=1.0 emerge more often,
-        # which BP exploits for cross-round constraint propagation.
-        self._pbw_byte = pbw_rng.uniform(0.0, 1.0, size=8)
-        self._pbw_word = pbw_rng.uniform(0.0, 1.0, size=32)
+        # Legacy shared 8/32-vector + half-sums. Always drawn first so that
+        # pbw_shared=True reproduces pre-rework leakage byte-identical given
+        # the same seed_pbw.
+        self._pbw_byte = self.pbw_rng.uniform(0.0, 1.0, size=8)
+        self._pbw_word = self.pbw_rng.uniform(0.0, 1.0, size=32)
         self._pbw_byte_half = float(self._pbw_byte.sum()) * 0.5
         self._pbw_word_half = float(self._pbw_word.sum()) * 0.5
+        # F_9 per-leakage-point storage. Lazily populated on first
+        # encounter of each sample_index. _bits256 is the 256×8 byte→bit
+        # decomposition matrix (rows in (b[0], b[1], ..., b[7]) order to
+        # match _emit_sample_pbw's bit indexing).
+        self._bits256 = np.array(
+            [[(b >> i) & 1 for i in range(8)] for b in range(256)],
+            dtype=np.float64,
+        )
+        self._pbw_byte_lut = []                  # list[ndarray (256,)]
+        self._pbw_word_weights_per_pos = []      # list[ndarray (32,)]
+        self._pbw_word_half_per_pos = []         # list[float]
+        self._pbw_word_intercept_per_pos = []    # list[float]
         self.rng = np.random.default_rng(rng_seed)
         self.trace_gain = 1.0
         self.trace_offset = 0.0
@@ -228,8 +266,9 @@ class KeccakTraceSimulator:
         self.invocation_sample_index += 1
 
     def _emit_sample_pbw(self, value, weights, w_sum_half, center):
-        """Emit one leakage sample as Σ wᵢ·bitᵢ — stochastic-model leakage that
-        distinguishes individual bits, not just Hamming weight."""
+        """Emit one leakage sample as Σ wᵢ·bitᵢ — collapsed-F_9 path
+        (pbw_shared=True). Uses a single shared `weights` vector for all
+        sample positions."""
         v = int(value)
         n = weights.shape[0]
         weighted = 0.0
@@ -237,6 +276,72 @@ class KeccakTraceSimulator:
             if (v >> i) & 1:
                 weighted += weights[i]
         sample_value = center + self.hw_scale * (weighted - w_sum_half)
+        if self.common_wave_scale != 0.0:
+            wave_index = self.sample_index
+            if self.common_wave_scope == "invocation":
+                wave_index = self.invocation_sample_index
+            phase = (2.0 * np.pi * float(wave_index)) / float(self.common_wave_period)
+            sample_value += self.common_wave_scale * (np.sin(phase) + 0.35 * np.sin((3.0 * phase) + 0.4))
+        sample_value += self.get_noise()
+        self.trace.append(sample_value)
+        self.sample_index += 1
+        self.invocation_sample_index += 1
+
+    def _pbw_byte_lut_at(self, idx):
+        """Return the (256,) per-byte centered contribution at sample
+        position `idx`. Lazily extends the table from `pbw_rng` when a new
+        position is encountered. Each entry is
+            lut[b] = c_8(t) + Σᵢ (b[i] − ½)·c_l[i](t)
+        so that E_b[lut[b]] = c_8(t) (per-position baseline), and
+        var_b[lut[b]] picks up only the bit-coefficient variation."""
+        while len(self._pbw_byte_lut) <= idx:
+            c_l = self.pbw_rng.uniform(0.0, 1.0, size=8)
+            c_8 = float(self.pbw_rng.uniform(-self.pbw_c8_range, self.pbw_c8_range))
+            # bits256 @ c_l = Σᵢ b[i]·c_l[i]; subtract ½·Σ c_l to mean-center
+            # the bit signal, then add c_8 as the per-position baseline.
+            lut = self._bits256 @ c_l - 0.5 * float(c_l.sum()) + c_8
+            self._pbw_byte_lut.append(lut)
+        return self._pbw_byte_lut[idx]
+
+    def _pbw_word_at(self, idx):
+        """Return (weights, w_sum_half, c_8) for word leakage at sample
+        position `idx`, lazily extending from `pbw_rng`."""
+        while len(self._pbw_word_weights_per_pos) <= idx:
+            c_l = self.pbw_rng.uniform(0.0, 1.0, size=32)
+            c_8 = float(self.pbw_rng.uniform(-self.pbw_c8_range, self.pbw_c8_range))
+            self._pbw_word_weights_per_pos.append(c_l)
+            self._pbw_word_half_per_pos.append(float(c_l.sum()) * 0.5)
+            self._pbw_word_intercept_per_pos.append(c_8)
+        return (self._pbw_word_weights_per_pos[idx],
+                self._pbw_word_half_per_pos[idx],
+                self._pbw_word_intercept_per_pos[idx])
+
+    def _emit_sample_byte_lut(self, byte_value, center):
+        """Emit one byte-bitweighted sample via the per-position LUT
+        (F_9-faithful path, pbw_shared=False)."""
+        contrib = self._pbw_byte_lut_at(self.sample_index)[int(byte_value) & 0xFF]
+        sample_value = center + self.hw_scale * float(contrib)
+        if self.common_wave_scale != 0.0:
+            wave_index = self.sample_index
+            if self.common_wave_scope == "invocation":
+                wave_index = self.invocation_sample_index
+            phase = (2.0 * np.pi * float(wave_index)) / float(self.common_wave_period)
+            sample_value += self.common_wave_scale * (np.sin(phase) + 0.35 * np.sin((3.0 * phase) + 0.4))
+        sample_value += self.get_noise()
+        self.trace.append(sample_value)
+        self.sample_index += 1
+        self.invocation_sample_index += 1
+
+    def _emit_sample_word_pbw(self, value, center):
+        """Emit one word-bitweighted sample with per-position weights +
+        intercept (F_9-faithful path, pbw_shared=False)."""
+        weights, w_sum_half, c_8 = self._pbw_word_at(self.sample_index)
+        v = int(value) & 0xFFFFFFFF
+        weighted = 0.0
+        for i in range(32):
+            if (v >> i) & 1:
+                weighted += weights[i]
+        sample_value = center + self.hw_scale * (weighted - w_sum_half + c_8)
         if self.common_wave_scale != 0.0:
             wave_index = self.sample_index
             if self.common_wave_scope == "invocation":
@@ -263,10 +368,18 @@ class KeccakTraceSimulator:
                 self._emit_sample(byte_hw, 4.0)
         elif g == "byte-bitweighted":
             for shift in (0, 8, 16, 24):
-                self._emit_sample_pbw((value >> shift) & 0xFF,
-                                      self._pbw_byte, self._pbw_byte_half, 4.0)
+                byte = (value >> shift) & 0xFF
+                if self.pbw_shared:
+                    self._emit_sample_pbw(byte,
+                                          self._pbw_byte, self._pbw_byte_half, 4.0)
+                else:
+                    self._emit_sample_byte_lut(byte, 4.0)
         elif g == "word-bitweighted":
-            self._emit_sample_pbw(value, self._pbw_word, self._pbw_word_half, 16.0)
+            if self.pbw_shared:
+                self._emit_sample_pbw(value,
+                                      self._pbw_word, self._pbw_word_half, 16.0)
+            else:
+                self._emit_sample_word_pbw(value, 16.0)
         else:  # "word"
             self._emit_sample(self.get_hw(value), 16.0)
         return value
@@ -1412,6 +1525,24 @@ def _build_cli_parser():
              "against one seed match data from the same seed. (default: 0xB17)",
     )
     parser.add_argument(
+        "--pbw-shared",
+        action="store_true",
+        help="Legacy: use a single shared 8-vec (byte) / 32-vec (word) of "
+             "per-bit weights for all leakage points (collapsed F_9). "
+             "Default off ⇒ per-leakage-point weights drawn lazily from "
+             "the seeded RNG. Use this only to reproduce pre-Apr-29 "
+             "archived runs (smoke widerpbw, paperscale_*, etc.).",
+    )
+    parser.add_argument(
+        "--pbw-c8-range",
+        type=float,
+        default=0.5,
+        help="Half-width of U(-r, +r) for the per-leakage-point intercept "
+             "c_8(t) in F_9. Set to 0 for weights-only per-position pbw "
+             "(no independent baseline variation). Ignored when "
+             "--pbw-shared is set. (default: 0.5)",
+    )
+    parser.add_argument(
         "--corr-probe-traces",
         type=int,
         default=0,
@@ -1648,6 +1779,8 @@ def main():
         leakage_granularity=args.leakage_granularity,
         rng_seed=args.bulk_seed,
         seed_pbw=args.seed_pbw,
+        pbw_shared=args.pbw_shared,
+        pbw_c8_range=args.pbw_c8_range,
     )
 
     if args.algorithm is None:

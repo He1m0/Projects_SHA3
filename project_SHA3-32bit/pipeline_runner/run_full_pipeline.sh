@@ -266,6 +266,14 @@ simulate_group() {
   INDEX_DIR="${TRACES_DIR}/Raw_${GROUP}_indexes"
   mkdir -p "${BASE_DIR}" "${INDEX_DIR}"
 
+  # SIM_PBW_SHARED is opt-in (legacy collapsed-pbw mode). Recognised truthy
+  # values: 1, true, yes, on. Anything else (including unset and "0") leaves
+  # the simulator in default per-leakage-point F_9 mode.
+  PBW_SHARED_FLAG=""
+  case "${SIM_PBW_SHARED:-0}" in
+    1|true|yes|on|TRUE|YES|ON) PBW_SHARED_FLAG="--pbw-shared" ;;
+  esac
+
   log "SIM  : ${GROUP} (folders=${FOLDERS}, traces/folder=${TRACES_PER_FOLDER}, seed=${SEED})"
   python3 "${SIM_SCRIPT}" \
     --algorithm "${SIM_ALGORITHM:-sha3-512}" \
@@ -286,6 +294,8 @@ simulate_group() {
     --leakage-profile "${SIM_LEAKAGE_PROFILE:-full}" \
     --leakage-granularity "${SIM_LEAKAGE_GRANULARITY:-word}" \
     --seed-pbw "${SIM_SEED_PBW:-2839}" \
+    --pbw-c8-range "${SIM_PBW_C8_RANGE:-0.5}" \
+    ${PBW_SHARED_FLAG} \
     --common-wave-scope "${SIM_COMMON_WAVE_SCOPE:-invocation}" \
     --hw-ratio "${SIM_HW_RATIO:-0.65}"
 
