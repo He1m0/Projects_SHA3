@@ -59,6 +59,8 @@ def loopy_BP_scan(tr):
   final_unknown_wrong = answer_len
   final_known_wrong = answer_len
   final_unknown_bits = 0
+  baseline_prediction = None
+  final_prediction = None
   for byte in range(0, RATE_POINT_COUNT):
     #print('  ================================================')
     unknown_bits = min(byte*RATE_STEP_BITS, answer_len)
@@ -75,10 +77,12 @@ def loopy_BP_scan(tr):
       best_unknown_bits = unknown_bits
     if byte==0:
       baseline_wrong_bits = wrong_bits
+      baseline_prediction = prediction.copy()
     final_wrong_bits = wrong_bits
     final_unknown_wrong = wrong_unknown
     final_known_wrong = wrong_known
     final_unknown_bits = unknown_bits
+    final_prediction = prediction
     check = (wrong_bits<=ALLOWED_WRONG_BITS)
     if (byte%25==0) or (byte==RATE_POINT_COUNT-1):
       print('  unknown_bits={:4d}, known_bits={:4d}: wrong_bits={}, ber={:.4f}, wrong_unknown={}/{}, wrong_known={}/{}, success={}'.format(
@@ -114,6 +118,15 @@ def loopy_BP_scan(tr):
   ))
   print('Saving results')
   svm.Save(('Success/success_'+str(tr).zfill(4)+'.npy'), Results)
+  # Per-bit error analysis: persist the BP prediction at the two anchor
+  # rate points. baseline = full template info (rate_point 0, no priors
+  # blanked); final = last rate point (priors fully blanked, BP working
+  # from constraints alone). The 1600-bit ground truth is already on
+  # disk at answer_bit/answers_A00/ans_bit_<tr>.npy.
+  if baseline_prediction is not None:
+    svm.Save(('Predictions/prediction_baseline_'+str(tr).zfill(4)+'.npy'), baseline_prediction)
+  if final_prediction is not None:
+    svm.Save(('Predictions/prediction_final_'+str(tr).zfill(4)+'.npy'), final_prediction)
   return
 
 if __name__=='__main__':
