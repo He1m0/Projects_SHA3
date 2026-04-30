@@ -73,6 +73,7 @@ class KeccakTraceSimulator:
         seed_pbw=None,
         pbw_shared=False,
         pbw_c8_range=0.5,
+        pbw_c_signed=False,
     ):
         """Constructor for KeccakTraceSimulator with optional realism controls."""
         self.trace = []
@@ -141,6 +142,12 @@ class KeccakTraceSimulator:
         self.pbw_c8_range = float(pbw_c8_range)
         if self.pbw_c8_range < 0:
             raise ValueError("pbw_c8_range must be >= 0 (got {})".format(pbw_c8_range))
+        # When True, F_9 bit coefficients c_l(t) are drawn from U(-0.5, +0.5)
+        # instead of the default U(0, 1). Closer to real chips where transitions
+        # can decrease consumption. Only affects the F_9 per-leakage-point path
+        # (pbw_shared=False); the legacy collapsed _pbw_byte / _pbw_word vectors
+        # always use U(0,1) so existing archives stay reproducible.
+        self.pbw_c_signed = bool(pbw_c_signed)
         self.pbw_rng = np.random.default_rng(0xB17 if seed_pbw is None else int(seed_pbw))
         self.seed_pbw = 0xB17 if seed_pbw is None else int(seed_pbw)
         # Legacy shared 8/32-vector + half-sums. Always drawn first so that
@@ -294,8 +301,12 @@ class KeccakTraceSimulator:
             lut[b] = c_8(t) + Σᵢ (b[i] − ½)·c_l[i](t)
         so that E_b[lut[b]] = c_8(t) (per-position baseline), and
         var_b[lut[b]] picks up only the bit-coefficient variation."""
+        # signed mode uses U(-1, 1) so that E[c_l²] = 1/3 matches U(0, 1)
+        # — same per-byte signal variance, just allowing negative coefficients
+        # (closer to real-chip behaviour where transitions can decrease draw).
+        c_lo, c_hi = (-1.0, 1.0) if self.pbw_c_signed else (0.0, 1.0)
         while len(self._pbw_byte_lut) <= idx:
-            c_l = self.pbw_rng.uniform(0.0, 1.0, size=8)
+            c_l = self.pbw_rng.uniform(c_lo, c_hi, size=8)
             c_8 = float(self.pbw_rng.uniform(-self.pbw_c8_range, self.pbw_c8_range))
             # bits256 @ c_l = Σᵢ b[i]·c_l[i]; subtract ½·Σ c_l to mean-center
             # the bit signal, then add c_8 as the per-position baseline.
@@ -306,8 +317,12 @@ class KeccakTraceSimulator:
     def _pbw_word_at(self, idx):
         """Return (weights, w_sum_half, c_8) for word leakage at sample
         position `idx`, lazily extending from `pbw_rng`."""
+        # signed mode uses U(-1, 1) so that E[c_l²] = 1/3 matches U(0, 1)
+        # — same per-byte signal variance, just allowing negative coefficients
+        # (closer to real-chip behaviour where transitions can decrease draw).
+        c_lo, c_hi = (-1.0, 1.0) if self.pbw_c_signed else (0.0, 1.0)
         while len(self._pbw_word_weights_per_pos) <= idx:
-            c_l = self.pbw_rng.uniform(0.0, 1.0, size=32)
+            c_l = self.pbw_rng.uniform(c_lo, c_hi, size=32)
             c_8 = float(self.pbw_rng.uniform(-self.pbw_c8_range, self.pbw_c8_range))
             self._pbw_word_weights_per_pos.append(c_l)
             self._pbw_word_half_per_pos.append(float(c_l.sum()) * 0.5)
@@ -1543,6 +1558,15 @@ def _build_cli_parser():
              "--pbw-shared is set. (default: 0.5)",
     )
     parser.add_argument(
+        "--pbw-c-signed",
+        action="store_true",
+        help="Draw F_9 bit coefficients c_l(t) from U(-1, +1) instead of "
+             "U(0, 1). Preserves E[c_l²]=1/3 (same per-byte signal variance), "
+             "but allows negative coefficients — closer to real-chip behaviour "
+             "where transitions can decrease consumption. Only affects the "
+             "F_9 per-leakage-point path (no effect with --pbw-shared).",
+    )
+    parser.add_argument(
         "--corr-probe-traces",
         type=int,
         default=0,
@@ -1781,6 +1805,7 @@ def main():
         seed_pbw=args.seed_pbw,
         pbw_shared=args.pbw_shared,
         pbw_c8_range=args.pbw_c8_range,
+        pbw_c_signed=args.pbw_c_signed,
     )
 
     if args.algorithm is None:

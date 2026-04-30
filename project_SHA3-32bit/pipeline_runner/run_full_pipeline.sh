@@ -273,6 +273,11 @@ simulate_group() {
   case "${SIM_PBW_SHARED:-0}" in
     1|true|yes|on|TRUE|YES|ON) PBW_SHARED_FLAG="--pbw-shared" ;;
   esac
+  # SIM_PBW_C_SIGNED is opt-in (F_9 with c_l ∈ U(-0.5, 0.5) instead of U(0, 1)).
+  PBW_C_SIGNED_FLAG=""
+  case "${SIM_PBW_C_SIGNED:-0}" in
+    1|true|yes|on|TRUE|YES|ON) PBW_C_SIGNED_FLAG="--pbw-c-signed" ;;
+  esac
 
   log "SIM  : ${GROUP} (folders=${FOLDERS}, traces/folder=${TRACES_PER_FOLDER}, seed=${SEED})"
   python3 "${SIM_SCRIPT}" \
@@ -296,6 +301,7 @@ simulate_group() {
     --seed-pbw "${SIM_SEED_PBW:-2839}" \
     --pbw-c8-range "${SIM_PBW_C8_RANGE:-0.5}" \
     ${PBW_SHARED_FLAG} \
+    ${PBW_C_SIGNED_FLAG} \
     --common-wave-scope "${SIM_COMMON_WAVE_SCOPE:-invocation}" \
     --hw-ratio "${SIM_HW_RATIO:-0.65}"
 
