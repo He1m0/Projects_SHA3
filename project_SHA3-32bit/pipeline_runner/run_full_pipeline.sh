@@ -97,7 +97,7 @@ if [ ! -f "${ENV_FILE}" ]; then
   exit 1
 fi
 
-if [ ! -f "${SIM_SCRIPT}" ]; then
+if [ "$SKIP_SIM" -eq 0 ] && [ ! -f "${SIM_SCRIPT}" ]; then
   echo "Error: simulator not found: ${SIM_SCRIPT}" >&2
   exit 1
 fi
