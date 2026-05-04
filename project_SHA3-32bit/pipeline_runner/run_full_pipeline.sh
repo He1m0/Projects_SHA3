@@ -5,7 +5,11 @@ set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 WORKSPACE_DIR="$(CDPATH= cd -- "${PROJECT_DIR}/.." && pwd)"
-SIM_SCRIPT="${WORKSPACE_DIR}/KeccakSim_BI_TA.py"
+# Default to v2 simulator; set SIM_SCRIPT_OVERRIDE in env to use legacy KeccakSim_BI_TA.py.
+SIM_SCRIPT="${WORKSPACE_DIR}/KeccakSim_v2.py"
+if [ -n "${SIM_SCRIPT_OVERRIDE:-}" ]; then
+  SIM_SCRIPT="${SIM_SCRIPT_OVERRIDE}"
+fi
 ICS_CHECK_SCRIPT="${SCRIPT_DIR}/check_ics_archive.py"
 
 ENV_FILE="${PROJECT_DIR}/.env_debug"
@@ -266,44 +270,88 @@ simulate_group() {
   INDEX_DIR="${TRACES_DIR}/Raw_${GROUP}_indexes"
   mkdir -p "${BASE_DIR}" "${INDEX_DIR}"
 
-  # SIM_PBW_SHARED is opt-in (legacy collapsed-pbw mode). Recognised truthy
-  # values: 1, true, yes, on. Anything else (including unset and "0") leaves
-  # the simulator in default per-leakage-point F_9 mode.
-  PBW_SHARED_FLAG=""
-  case "${SIM_PBW_SHARED:-0}" in
-    1|true|yes|on|TRUE|YES|ON) PBW_SHARED_FLAG="--pbw-shared" ;;
-  esac
-  # SIM_PBW_C_SIGNED is opt-in (F_9 with c_l ∈ U(-0.5, 0.5) instead of U(0, 1)).
-  PBW_C_SIGNED_FLAG=""
-  case "${SIM_PBW_C_SIGNED:-0}" in
-    1|true|yes|on|TRUE|YES|ON) PBW_C_SIGNED_FLAG="--pbw-c-signed" ;;
+  log "SIM  : ${GROUP} (folders=${FOLDERS}, traces/folder=${TRACES_PER_FOLDER}, seed=${SEED})"
+
+  # Detect which simulator is in use by checking for v2-specific flag.
+  IS_V2=0
+  case "${SIM_SCRIPT}" in
+    *KeccakSim_v2*) IS_V2=1 ;;
   esac
 
-  log "SIM  : ${GROUP} (folders=${FOLDERS}, traces/folder=${TRACES_PER_FOLDER}, seed=${SEED})"
-  python3 "${SIM_SCRIPT}" \
-    --algorithm "${SIM_ALGORITHM:-sha3-512}" \
-    --trace \
-    --bulk-invocations "${SHA3_INVOCATIONS}" \
-    --bulk-traces-per-folder "${TRACES_PER_FOLDER}" \
-    --bulk-folders "${FOLDERS}" \
-    --bulk-output-dir "${BASE_DIR}/Raw_${GROUP}_" \
-    --bulk-index-dir "${INDEX_DIR}" \
-    --trace-format "${SIM_TRACE_FORMAT:-bin}" \
-    --trace-dtype "${SIM_TRACE_DTYPE:-float64}" \
-    --bulk-data-format "${SIM_BULK_DATA_FORMAT:-hex}" \
-    --noise-sigma "${SIM_NOISE_SIGMA:-0.01}" \
-    --gain-jitter-sigma "${SIM_GAIN_JITTER_SIGMA:-0.001}" \
-    --offset-jitter-sigma "${SIM_OFFSET_JITTER_SIGMA:-0.01}" \
-    --smooth-window "${SIM_SMOOTH_WINDOW:-1}" \
-    --bulk-seed "${SEED}" \
-    --leakage-profile "${SIM_LEAKAGE_PROFILE:-full}" \
-    --leakage-granularity "${SIM_LEAKAGE_GRANULARITY:-word}" \
-    --seed-pbw "${SIM_SEED_PBW:-2839}" \
-    --pbw-c8-range "${SIM_PBW_C8_RANGE:-0.5}" \
-    ${PBW_SHARED_FLAG} \
-    ${PBW_C_SIGNED_FLAG} \
-    --common-wave-scope "${SIM_COMMON_WAVE_SCOPE:-invocation}" \
-    --hw-ratio "${SIM_HW_RATIO:-0.65}"
+  if [ "${IS_V2}" = "1" ]; then
+    # --- KeccakSim_v2 invocation ---
+    # F9 table: generate once per run, reuse across all groups.
+    F9_FLAGS=""
+    if [ "${SIM_MODE:-hw}" = "f9" ]; then
+      F9_TABLE_PATH="${SIM_F9_TABLE_PATH:-${TRACES_DIR}/f9_table_${SIM_GRANULARITY:-byte}_seed${SIM_F9_SEED:-2839}.npy}"
+      # Determine per-invocation trace length from global_config.
+      F9_TABLE_SIZE=$(python3 -c "import sys; sys.path.insert(0,'${PROJECT_DIR}'); import global_config as c; print(c.REFERENCE_TRACE_LEN)")
+      if [ ! -f "${F9_TABLE_PATH}" ]; then
+        log "F9TBL: generating ${F9_TABLE_PATH} (size=${F9_TABLE_SIZE})"
+        python3 "${SIM_SCRIPT}" \
+          --generate-f9-table \
+          --f9-table "${F9_TABLE_PATH}" \
+          --f9-table-size "${F9_TABLE_SIZE}" \
+          --granularity "${SIM_GRANULARITY:-byte}" \
+          --f9-seed "${SIM_F9_SEED:-2839}" \
+          --f9-c8-range "${SIM_F9_C8_RANGE:-0.5}"
+      fi
+      F9_FLAGS="--f9-table ${F9_TABLE_PATH} --f9-table-size ${F9_TABLE_SIZE} --f9-seed ${SIM_F9_SEED:-2839} --f9-c8-range ${SIM_F9_C8_RANGE:-0.5}"
+    fi
+    python3 "${SIM_SCRIPT}" \
+      --algorithm "${SIM_ALGORITHM:-sha3-512}" \
+      --trace \
+      --bulk-invocations "${SHA3_INVOCATIONS}" \
+      --bulk-traces-per-folder "${TRACES_PER_FOLDER}" \
+      --bulk-folders "${FOLDERS}" \
+      --bulk-output-dir "${BASE_DIR}/Raw_${GROUP}_" \
+      --bulk-index-dir "${INDEX_DIR}" \
+      --trace-format "${SIM_TRACE_FORMAT:-bin}" \
+      --trace-dtype "${SIM_TRACE_DTYPE:-float64}" \
+      --bulk-data-format "${SIM_BULK_DATA_FORMAT:-hex}" \
+      --mode "${SIM_MODE:-hw}" \
+      --granularity "${SIM_GRANULARITY:-byte}" \
+      --noise-sigma "${SIM_NOISE_SIGMA:-0.01}" \
+      --hd-add-scale "${SIM_HD_ADD_SCALE:-0.0}" \
+      --bulk-seed "${SEED}" \
+      ${F9_FLAGS}
+  else
+    # --- Legacy KeccakSim_BI_TA.py invocation (archive reproducibility) ---
+    PBW_SHARED_FLAG=""
+    case "${SIM_PBW_SHARED:-0}" in
+      1|true|yes|on|TRUE|YES|ON) PBW_SHARED_FLAG="--pbw-shared" ;;
+    esac
+    PBW_C_SIGNED_FLAG=""
+    case "${SIM_PBW_C_SIGNED:-0}" in
+      1|true|yes|on|TRUE|YES|ON) PBW_C_SIGNED_FLAG="--pbw-c-signed" ;;
+    esac
+    python3 "${SIM_SCRIPT}" \
+      --algorithm "${SIM_ALGORITHM:-sha3-512}" \
+      --trace \
+      --bulk-invocations "${SHA3_INVOCATIONS}" \
+      --bulk-traces-per-folder "${TRACES_PER_FOLDER}" \
+      --bulk-folders "${FOLDERS}" \
+      --bulk-output-dir "${BASE_DIR}/Raw_${GROUP}_" \
+      --bulk-index-dir "${INDEX_DIR}" \
+      --trace-format "${SIM_TRACE_FORMAT:-bin}" \
+      --trace-dtype "${SIM_TRACE_DTYPE:-float64}" \
+      --bulk-data-format "${SIM_BULK_DATA_FORMAT:-hex}" \
+      --noise-sigma "${SIM_NOISE_SIGMA:-0.01}" \
+      --gain-jitter-sigma "${SIM_GAIN_JITTER_SIGMA:-0.001}" \
+      --offset-jitter-sigma "${SIM_OFFSET_JITTER_SIGMA:-0.01}" \
+      --smooth-window "${SIM_SMOOTH_WINDOW:-1}" \
+      --bulk-seed "${SEED}" \
+      --leakage-profile "${SIM_LEAKAGE_PROFILE:-full}" \
+      --leakage-granularity "${SIM_LEAKAGE_GRANULARITY:-word}" \
+      --seed-pbw "${SIM_SEED_PBW:-2839}" \
+      --pbw-c8-range "${SIM_PBW_C8_RANGE:-0.5}" \
+      ${PBW_SHARED_FLAG} \
+      ${PBW_C_SIGNED_FLAG} \
+      --hd-add-scale "${SIM_HD_ADD_SCALE:-0.0}" \
+      --leak-repeat "${SIM_LEAK_REPEAT:-1}" \
+      --common-wave-scope "${SIM_COMMON_WAVE_SCOPE:-invocation}" \
+      --hw-ratio "${SIM_HW_RATIO:-0.65}"
+  fi
 
   log "ZIP  : ${GROUP}"
   zip_sim_dirs "${BASE_DIR}" "Raw_${GROUP}"
