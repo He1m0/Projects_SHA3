@@ -281,8 +281,12 @@ simulate_group() {
   if [ "${IS_V2}" = "1" ]; then
     # --- KeccakSim_v2 invocation ---
     # F9 table: generate once per run, reuse across all groups.
+    # Needed for mode=f9, mode=mixed, or any explicit SIM_F9_SCALE > 0.
     F9_FLAGS=""
-    if [ "${SIM_MODE:-hw}" = "f9" ]; then
+    _NEEDS_F9=0
+    case "${SIM_MODE:-hw}" in f9|mixed) _NEEDS_F9=1 ;; esac
+    case "${SIM_F9_SCALE:-}" in ""|0|0.0) ;; *) _NEEDS_F9=1 ;; esac
+    if [ "${_NEEDS_F9}" = "1" ]; then
       F9_TABLE_PATH="${SIM_F9_TABLE_PATH:-${TRACES_DIR}/f9_table_${SIM_GRANULARITY:-byte}_seed${SIM_F9_SEED:-2839}.npy}"
       # Determine per-invocation trace length from global_config.
       F9_TABLE_SIZE=$(python3 -c "import sys; sys.path.insert(0,'${PROJECT_DIR}'); import global_config as c; print(c.REFERENCE_TRACE_LEN)")
@@ -298,6 +302,11 @@ simulate_group() {
       fi
       F9_FLAGS="--f9-table ${F9_TABLE_PATH} --f9-table-size ${F9_TABLE_SIZE} --f9-seed ${SIM_F9_SEED:-2839} --f9-c8-range ${SIM_F9_C8_RANGE:-0.5}"
     fi
+    # Optional per-component scale overrides (omit flags when not set so the
+    # simulator applies mode-appropriate defaults for backward compatibility).
+    SCALE_FLAGS=""
+    [ -n "${SIM_HW_SCALE}" ] && SCALE_FLAGS="${SCALE_FLAGS} --hw-scale ${SIM_HW_SCALE}"
+    [ -n "${SIM_F9_SCALE}" ] && SCALE_FLAGS="${SCALE_FLAGS} --f9-scale ${SIM_F9_SCALE}"
     python3 "${SIM_SCRIPT}" \
       --algorithm "${SIM_ALGORITHM:-sha3-512}" \
       --trace \
@@ -314,6 +323,7 @@ simulate_group() {
       --noise-sigma "${SIM_NOISE_SIGMA:-0.01}" \
       --hd-add-scale "${SIM_HD_ADD_SCALE:-0.0}" \
       --bulk-seed "${SEED}" \
+      ${SCALE_FLAGS} \
       ${F9_FLAGS}
   else
     # --- Legacy KeccakSim_BI_TA.py invocation (archive reproducibility) ---

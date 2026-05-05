@@ -1,15 +1,20 @@
 """KeccakSim_v2.py — Clean Keccak-f[1600] trace simulator.
 
-Two leakage modes:
-  hw  — HW(uint32) or 4×HW(byte) + additive Gaussian noise.
-  f9  — Stochastic model (You & Kuhn 2022 / Schindler et al. 2005):
-          L(t) = Σ_{l} v[l]·C[t,l] + C[t,-1] + noise
-        Coefficients are pre-computed into a (T × n_coeffs) table and saved
-        as a .npy file so the same table can be reused across all simulation
-        groups in one run.
+Three leakage modes — all are sums of independently scaled components:
 
-Both modes support an optional additive HD term:
-  L_total(t) += hd_add_scale × HD(value, prev_value)
+  hw    — hw_scale × HW(value) + hd_add_scale × HD(value, prev) + noise
+  f9    — f9_scale × F9(value, t) + hd_add_scale × HD(value, prev) + noise
+  mixed — hw_scale × HW(value) + f9_scale × F9(value, t)
+          + hd_add_scale × HD(value, prev) + noise
+
+  hw_scale / f9_scale default to 1.0/0.0 (hw) or 0.0/1.0 (f9) for backward
+  compatibility. Pass --hw-scale / --f9-scale (or SIM_HW_SCALE / SIM_F9_SCALE)
+  to override any combination.
+
+F9 model (You & Kuhn 2022 / Schindler et al. 2005):
+  F9(value, t) = Σ_{l} v[l]·C[t,l] + C[t,-1]
+  Coefficients are pre-computed into a (T × n_coeffs) table and saved as a
+  .npy file so the same table is reused across all simulation groups in a run.
 
 Granularity:
   word — one 32-bit sample per leak() call  (n_coeffs = 33 for f9)
@@ -110,17 +115,29 @@ class KeccakTraceSimulator:
         granularity="byte",
         noise_sigma=0.0,
         hd_add_scale=0.0,
+        hw_scale=None,
+        f9_scale=None,
         rng_seed=None,
         f9_table=None,
     ):
-        if mode not in ("hw", "f9"):
-            raise ValueError("mode must be 'hw' or 'f9' (got '{}')".format(mode))
+        if mode not in ("hw", "f9", "mixed"):
+            raise ValueError("mode must be 'hw', 'f9', or 'mixed' (got '{}')".format(mode))
         if granularity not in ("word", "byte"):
             raise ValueError("granularity must be 'word' or 'byte' (got '{}')".format(granularity))
         self.mode = mode
         self.granularity = granularity
         self.noise_sigma = float(noise_sigma)
         self.hd_add_scale = float(hd_add_scale)
+        # Derive per-component scales from mode when not explicitly provided.
+        if mode == "f9":
+            self.hw_scale = 0.0 if hw_scale is None else float(hw_scale)
+            self.f9_scale = 1.0 if f9_scale is None else float(f9_scale)
+        elif mode == "mixed":
+            self.hw_scale = 1.0 if hw_scale is None else float(hw_scale)
+            self.f9_scale = 1.0 if f9_scale is None else float(f9_scale)
+        else:  # hw
+            self.hw_scale = 1.0 if hw_scale is None else float(hw_scale)
+            self.f9_scale = 0.0 if f9_scale is None else float(f9_scale)
         self.f9_table = f9_table  # ndarray (T, 9) or (T, 33), or None
         self.rng = np.random.default_rng(rng_seed)
         self.trace = []
@@ -189,52 +206,47 @@ class KeccakTraceSimulator:
         self.sample_index += 1
         self.invocation_sample_index += 1
 
-    def _leak_hw(self, value):
+    def _leak_signal(self, value):
+        # signal = hw_scale*HW + f9_scale*F9 + hd_add_scale*HD
+        # Use invocation_sample_index for F9 so all permutation invocations share
+        # the same per-position coefficients (modular over the table size).
         if self.granularity == "byte":
             cur = [((value >> s) & 0xFF) for s in (0, 8, 16, 24)]
             for i, b in enumerate(cur):
-                hw = bin(b).count("1")
+                sig = 0.0
+                if self.hw_scale:
+                    sig += self.hw_scale * bin(b).count("1")
+                if self.f9_scale:
+                    if self.f9_table is None:
+                        raise RuntimeError(
+                            "f9_scale > 0 requires a pre-computed coefficient table. "
+                            "Pass f9_table= to __init__ or use --f9-table on the CLI."
+                        )
+                    row = self.f9_table[self.invocation_sample_index % len(self.f9_table)]
+                    sig += self.f9_scale * (float(_BITS256[b] @ row[:8]) + row[8])
                 hd = self.hd_add_scale * bin(b ^ self._hd_prev_bytes[i]).count("1") if self.hd_add_scale else 0.0
-                self._emit(float(hw) + hd)
+                self._emit(sig + hd)
             self._hd_prev_bytes = cur
         else:
-            hw = bin(value).count("1")
+            sig = 0.0
+            if self.hw_scale:
+                sig += self.hw_scale * bin(value).count("1")
+            if self.f9_scale:
+                if self.f9_table is None:
+                    raise RuntimeError(
+                        "f9_scale > 0 requires a pre-computed coefficient table. "
+                        "Pass f9_table= to __init__ or use --f9-table on the CLI."
+                    )
+                row = self.f9_table[self.invocation_sample_index % len(self.f9_table)]
+                bits = np.array([(value >> l) & 1 for l in range(32)], dtype=np.float64)
+                sig += self.f9_scale * (float(np.dot(bits, row[:32])) + row[32])
             hd = self.hd_add_scale * bin(value ^ self._hd_prev_word).count("1") if self.hd_add_scale else 0.0
-            self._emit(float(hw) + hd)
-            self._hd_prev_word = value
-
-    def _leak_f9(self, value):
-        if self.f9_table is None:
-            raise RuntimeError(
-                "F9 mode requires a pre-computed coefficient table. "
-                "Pass f9_table= to __init__ or use --f9-table on the CLI."
-            )
-        # Use invocation_sample_index so all permutation invocations share the
-        # same per-position coefficients (modular in case non-permutation
-        # operations exceed the table size).
-        T = len(self.f9_table)
-        if self.granularity == "byte":
-            cur = [((value >> s) & 0xFF) for s in (0, 8, 16, 24)]
-            for i, b in enumerate(cur):
-                row = self.f9_table[self.invocation_sample_index % T]
-                signal = float(_BITS256[b] @ row[:8]) + row[8]
-                hd = self.hd_add_scale * bin(b ^ self._hd_prev_bytes[i]).count("1") if self.hd_add_scale else 0.0
-                self._emit(signal + hd)
-            self._hd_prev_bytes = cur
-        else:
-            row = self.f9_table[self.invocation_sample_index % T]
-            bits = np.array([(value >> l) & 1 for l in range(32)], dtype=np.float64)
-            signal = float(np.dot(bits, row[:32])) + row[32]
-            hd = self.hd_add_scale * bin(value ^ self._hd_prev_word).count("1") if self.hd_add_scale else 0.0
-            self._emit(signal + hd)
+            self._emit(sig + hd)
             self._hd_prev_word = value
 
     def leak(self, value):
         value = int(value) & 0xFFFFFFFF
-        if self.mode == "hw":
-            self._leak_hw(value)
-        else:
-            self._leak_f9(value)
+        self._leak_signal(value)
         return value
 
     # ------------------------------------------------------------------
@@ -862,14 +874,20 @@ def _build_cli_parser():
     p.add_argument("--trace-separator", default="\n")
     p.add_argument("--append-trace", action="store_true")
     # Leakage model
-    p.add_argument("--mode", choices=["hw","f9"], default="hw",
-                   help="Leakage model: hw = Hamming weight, f9 = stochastic (default: hw)")
+    p.add_argument("--mode", choices=["hw","f9","mixed"], default="hw",
+                   help="Leakage model: hw, f9, or mixed (default: hw). "
+                        "In mixed mode all three components are active; use "
+                        "--hw-scale/--f9-scale/--hd-add-scale to weight them.")
     p.add_argument("--granularity", choices=["word","byte"], default="byte",
                    help="Emission granularity: word (1 sample/leak) or byte (4 samples/leak, default)")
     p.add_argument("--noise-sigma", type=float, default=0.0,
                    help="Std-dev of additive Gaussian noise per sample (default: 0)")
+    p.add_argument("--hw-scale", type=float, default=None,
+                   help="HW component scale (default: 1.0 for hw/mixed, 0.0 for f9)")
+    p.add_argument("--f9-scale", type=float, default=None,
+                   help="F9 component scale (default: 1.0 for f9/mixed, 0.0 for hw)")
     p.add_argument("--hd-add-scale", type=float, default=0.0,
-                   help="Scale for additive HD term on top of base leakage (default: 0 = disabled)")
+                   help="HD component scale added on top of hw+f9 (default: 0 = disabled)")
     # F9 table
     p.add_argument("--f9-table",
                    help="Path to F9 coefficient table .npy. If missing, generate+save it.")
@@ -964,11 +982,14 @@ def main():
     if args.trace and algo in ("shake128","shake256"):
         parser.error("Trace generation is implemented only for SHA3 algorithms")
 
-    # Resolve F9 table.
+    # Resolve F9 table — needed whenever the effective f9_scale will be non-zero.
+    _f9_scale_effective = args.f9_scale if args.f9_scale is not None else (
+        1.0 if args.mode in ("f9", "mixed") else 0.0
+    )
     f9_table = None
-    if args.mode == "f9":
+    if _f9_scale_effective > 0:
         if not args.f9_table:
-            parser.error("--mode f9 requires --f9-table PATH")
+            parser.error("--mode {} with f9_scale > 0 requires --f9-table PATH".format(args.mode))
         table_size = args.f9_table_size
         if not Path(args.f9_table).exists():
             if not table_size:
@@ -984,6 +1005,8 @@ def main():
         granularity=args.granularity,
         noise_sigma=args.noise_sigma,
         hd_add_scale=args.hd_add_scale,
+        hw_scale=args.hw_scale,
+        f9_scale=args.f9_scale,
         rng_seed=args.bulk_seed,
         f9_table=f9_table,
     )
