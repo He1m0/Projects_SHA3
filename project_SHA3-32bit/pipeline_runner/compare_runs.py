@@ -61,6 +61,20 @@ def load_success_curves(archive: Path, depth: str):
     return curves
 
 
+def load_rate_scan_npy(archive: Path, depth: str):
+    """Load the newer rate_scan_{depth}_B.npy summary format.
+
+    Returns (counts, n_total) where counts[k] = number of successful attacks
+    at scan point k (out of n_total), or None if not present.
+    """
+    p = archive / "0005_SASCA" / "Rate_Scan" / f"rate_scan_{depth}_B.npy"
+    if not p.exists():
+        return None
+    arr = np.load(p).astype(float)
+    n_total = int(arr.max()) if arr.max() > 0 else 1
+    return arr, n_total
+
+
 def family_aggregate(rows):
     agg = {"sr": {}, "ge": {}}
     for letter in FAM_LETTERS:
@@ -93,12 +107,14 @@ def main():
         if rows is None:
             sys.exit(f"missing summary_family_round.csv in {arch}")
         curves = load_success_curves(arch, args.rate_depth)
+        rate_summary = load_rate_scan_npy(arch, args.rate_depth)
         runs.append({
             "path": arch,
             "name": arch.name,
             "rows": rows,
             "agg": family_aggregate(rows),
             "curves": curves,
+            "rate_summary": rate_summary,
         })
 
     labels = [r["family_round"] for r in runs[0]["rows"]]
@@ -193,32 +209,60 @@ def main():
                 f"(this comparison has N={n}.)",
                 ha="center", va="center", fontsize=10)
 
-    # Rate_Scan success curves — subsample evenly if too many
+    # Rate_Scan success curves — both per-trace (old) and summary-npy (new) formats.
+    # x-axis is normalised to [0, 1]: 0 = max data rate (easiest), 1 = min (hardest).
+    # y-axis is success fraction [0, 1].
     ax = fig.add_subplot(gs[2, :])
     has_any = False
     for i, r in enumerate(runs):
         curves = r["curves"]
-        if len(curves) > args.max_curves:
-            step = max(1, len(curves) // args.max_curves)
-            curves = curves[::step][:args.max_curves]
-        for j, (name, curve) in enumerate(curves):
+        rate_summary = r["rate_summary"]
+
+        # Old per-trace format: plot faint individual lines + a thick mean aggregate.
+        if curves:
             has_any = True
-            ax.plot(np.arange(len(curve)), curve.astype(int),
-                    color=colors[i], alpha=0.45, lw=1.0,
-                    label=(f"{r['name']} (n={len(r['curves'])})"
-                           if j == 0 else None))
+            max_len = max(len(c) for _, c in curves)
+            xs_norm = np.linspace(0, 1, max_len)
+
+            plot_curves = curves
+            if len(plot_curves) > args.max_curves:
+                step = max(1, len(plot_curves) // args.max_curves)
+                plot_curves = plot_curves[::step][:args.max_curves]
+            for j, (_, curve) in enumerate(plot_curves):
+                ax.plot(np.linspace(0, 1, len(curve)), curve.astype(float),
+                        color=colors[i], alpha=0.25, lw=0.8,
+                        label=(f"{r['name']} (n={len(curves)}, per-trace)"
+                               if j == 0 else None))
+
+            # Mean aggregate across all curves (pad shorter ones with NaN).
+            mat = np.full((len(curves), max_len), np.nan)
+            for k, (_, c) in enumerate(curves):
+                mat[k, :len(c)] = c.astype(float)
+            ax.plot(xs_norm, np.nanmean(mat, axis=0),
+                    color=colors[i], lw=2.2, ls="--", alpha=0.9)
+
+        # New summary-npy format: single aggregate fraction line.
+        if rate_summary is not None:
+            has_any = True
+            arr, n_total = rate_summary
+            xs_norm = np.linspace(0, 1, len(arr))
+            ax.plot(xs_norm, arr / n_total,
+                    color=colors[i], lw=2.2,
+                    label=f"{r['name']} (n={n_total}, summary)")
+
     if has_any:
-        ax.set_xlabel("rate scan point (0 = 0 unknown bits; larger = more unknown)")
-        ax.set_ylabel(f"BP success (0/1) — {args.rate_depth}")
-        ax.set_yticks([0, 1])
-        ax.set_title(f"Per-trace Rate_Scan_{args.rate_depth} success "
-                     "(higher x reached = stronger templates)")
+        ax.set_xlabel("rate scan position  (0 = max data rate / easiest → 1 = min / hardest)")
+        ax.set_ylabel(f"success fraction — {args.rate_depth}")
+        ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+        ax.set_ylim(-0.05, 1.05)
+        ax.set_title(f"Rate_Scan_{args.rate_depth} aggregate success "
+                     "(solid = summary npy; dashed = mean of per-trace curves)")
         ax.legend(loc="upper right", fontsize=8)
         ax.grid(True, alpha=0.3)
     else:
         ax.axis("off")
         ax.text(0.5, 0.5,
-                f"No Rate_Scan_{args.rate_depth} success curves in any archive",
+                f"No Rate_Scan_{args.rate_depth} data in any archive",
                 ha="center", va="center", fontsize=10)
 
     out = args.out or (runs[0]["path"].parent / f"comparison_{'_vs_'.join(r['name'] for r in runs)}.png")
@@ -245,16 +289,25 @@ def main():
                 ge = r["agg"]["ge"].get(L, 0.0)
                 f.write(f"{'SR=' + f'{sr:.4f}' + ' GE=' + f'{ge:.1f}':>20}")
             f.write("\n")
-        f.write(f"\nRate_Scan success-count distribution (per trace, out of "
-                f"curve length):\n")
+        f.write(f"\nRate_Scan_{args.rate_depth} success summary:\n")
         for r in runs:
             if r["curves"]:
                 counts = np.array([int(c.sum()) for _, c in r["curves"]])
-                f.write(f"  {r['name']}: n={len(counts)}  min={counts.min()}  "
-                        f"median={int(np.median(counts))}  max={counts.max()}  "
-                        f"mean={counts.mean():.1f}\n")
+                f.write(f"  {r['name']} [per-trace]: n={len(counts)}  "
+                        f"min={counts.min()}  median={int(np.median(counts))}  "
+                        f"max={counts.max()}  mean={counts.mean():.1f}\n")
+            elif r["rate_summary"] is not None:
+                arr, n_total = r["rate_summary"]
+                frac = arr / n_total
+                # find the last scan point where ≥50% of attacks succeed
+                above_half = np.where(frac >= 0.5)[0]
+                half_pt = int(above_half[-1]) if len(above_half) else -1
+                f.write(f"  {r['name']} [summary npy]: n={n_total}  "
+                        f"SR@0={frac[0]:.2f}  SR@mid={frac[len(frac)//2]:.2f}  "
+                        f"SR@end={frac[-1]:.2f}  "
+                        f"last≥50%=pt{half_pt}/{len(arr)-1}\n")
             else:
-                f.write(f"  {r['name']}: (no curves)\n")
+                f.write(f"  {r['name']}: (no rate scan data)\n")
     print(f"saved {txt}")
 
 
