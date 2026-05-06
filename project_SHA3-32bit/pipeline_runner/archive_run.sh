@@ -40,6 +40,8 @@ What gets archived:
   0004_validation/Result_Tables.zip     # if present
   0005_SASCA/Iteration_Scan/iteration_scan_{2,3,4}R_B.npy
   0005_SASCA/Rate_Scan/{2,3,4}R_Success/success_????.npy
+  0005_SASCA/Rate_Scan/{2,3,4}R_Predictions/prediction_{baseline,final}_????.npy
+  0005_SASCA/answers_A00/ans_bit_????.npy  # ground truth for analyze_per_bit_errors.py
   0003_training/profiling_bytes_listing.txt
   README.md                             # timestamp + progress + one-line verdict
 
@@ -149,11 +151,12 @@ for R in 2R 3R 4R; do
   fi
 done
 
-# --- 0005 Rate_Scan: summary npy + (if present) per-trace Success/ ---
+# --- 0005 Rate_Scan: summary npy + (if present) per-trace Success/ + Predictions/ ---
 RATE_COUNTS=""
 for R in 2R 3R 4R; do
   SCAN="${PROJECT_DIR}/0005_SASCA/Rate_Scan_${R}"
-  OUT="${DEST}/0005_SASCA/Rate_Scan/${R}_Success"
+  OUT_SUCC="${DEST}/0005_SASCA/Rate_Scan/${R}_Success"
+  OUT_PRED="${DEST}/0005_SASCA/Rate_Scan/${R}_Predictions"
   SUMMARY="${SCAN}/rate_scan_${R}_B.npy"
   if [ -f "${SUMMARY}" ]; then
     mkdir -p "${DEST}/0005_SASCA/Rate_Scan"
@@ -161,14 +164,42 @@ for R in 2R 3R 4R; do
   fi
   SUCC="${SCAN}/Success"
   if [ -d "${SUCC}" ] && [ -n "$(ls -A "${SUCC}" 2>/dev/null || true)" ]; then
-    mkdir -p "${OUT}"
-    cp -r "${SUCC}/." "${OUT}/"
-    N=$(ls "${OUT}" 2>/dev/null | wc -l | tr -d ' ')
+    mkdir -p "${OUT_SUCC}"
+    cp -r "${SUCC}/." "${OUT_SUCC}/"
+    N=$(ls "${OUT_SUCC}" 2>/dev/null | wc -l | tr -d ' ')
     RATE_COUNTS="${RATE_COUNTS}${R}/Success=${N}  "
   elif [ -f "${SUMMARY}" ]; then
     RATE_COUNTS="${RATE_COUNTS}${R}=summary  "
   fi
+  PREDS="${SCAN}/Predictions"
+  if [ -d "${PREDS}" ] && [ -n "$(ls -A "${PREDS}" 2>/dev/null || true)" ]; then
+    mkdir -p "${OUT_PRED}"
+    cp -r "${PREDS}/." "${OUT_PRED}/"
+    N=$(ls "${OUT_PRED}" 2>/dev/null | wc -l | tr -d ' ')
+    RATE_COUNTS="${RATE_COUNTS}${R}/Predictions=${N}  "
+  fi
 done
+
+# --- 0005 answers_A00 (ground truth, needed by analyze_per_bit_errors.py) ---
+# Prefer the live Rate_Scan_2R/answer_bit/answers_A00 if it hasn't been cleaned
+# yet; fall back to extracting from the persistent get_answers/answer_bit.zip.
+ANS_DEST="${DEST}/0005_SASCA/answers_A00"
+ANS_LIVE="${PROJECT_DIR}/0005_SASCA/Rate_Scan_2R/answer_bit/answers_A00"
+ANS_ZIP="${PROJECT_DIR}/0005_SASCA/get_answers/answer_bit.zip"
+if [ -d "${ANS_LIVE}" ] && [ -n "$(ls -A "${ANS_LIVE}" 2>/dev/null || true)" ]; then
+  mkdir -p "${ANS_DEST}"
+  cp -r "${ANS_LIVE}/." "${ANS_DEST}/"
+  echo "archived: answers_A00/ (from live Rate_Scan_2R/answer_bit)"
+elif [ -f "${ANS_ZIP}" ]; then
+  TMP_ANS="$(mktemp -d)"
+  unzip -o -q "${ANS_ZIP}" "answer_bit/answers_A00/*" -d "${TMP_ANS}" || true
+  if [ -d "${TMP_ANS}/answer_bit/answers_A00" ]; then
+    mkdir -p "${ANS_DEST}"
+    cp -r "${TMP_ANS}/answer_bit/answers_A00/." "${ANS_DEST}/"
+    echo "archived: answers_A00/ (extracted from get_answers/answer_bit.zip)"
+  fi
+  rm -rf "${TMP_ANS}"
+fi
 
 # --- 0003 profiling listing ---
 PROF_DIR="${PROJECT_DIR}/0003_training/template_profiling_bytes"
@@ -226,7 +257,7 @@ fi
   echo "log/                    -- run log (gzipped) if --log was given"
   echo "0003_training/          -- template_profiling_bytes listing (not the templates)"
   echo "0004_validation/        -- Result_Tables.zip + quality_report/"
-  echo "0005_SASCA/             -- Iteration_Scan/*.npy + Rate_Scan/{2,3,4}R_Success/"
+  echo "0005_SASCA/             -- Iteration_Scan/*.npy + Rate_Scan/{2,3,4}R_Success/ + {2,3,4}R_Predictions/ + answers_A00/"
   echo '```'
 } > "${DEST}/README.md"
 
