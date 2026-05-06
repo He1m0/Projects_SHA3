@@ -305,8 +305,8 @@ simulate_group() {
     # Optional per-component scale overrides (omit flags when not set so the
     # simulator applies mode-appropriate defaults for backward compatibility).
     SCALE_FLAGS=""
-    [ -n "${SIM_HW_SCALE}" ] && SCALE_FLAGS="${SCALE_FLAGS} --hw-scale ${SIM_HW_SCALE}"
-    [ -n "${SIM_F9_SCALE}" ] && SCALE_FLAGS="${SCALE_FLAGS} --f9-scale ${SIM_F9_SCALE}"
+    [ -n "${SIM_HW_SCALE:-}" ] && SCALE_FLAGS="${SCALE_FLAGS} --hw-scale ${SIM_HW_SCALE}"
+    [ -n "${SIM_F9_SCALE:-}" ] && SCALE_FLAGS="${SCALE_FLAGS} --f9-scale ${SIM_F9_SCALE}"
     python3 "${SIM_SCRIPT}" \
       --algorithm "${SIM_ALGORITHM:-sha3-512}" \
       --trace \
