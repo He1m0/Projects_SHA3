@@ -287,20 +287,28 @@ simulate_group() {
     case "${SIM_MODE:-hw}" in f9|mixed) _NEEDS_F9=1 ;; esac
     case "${SIM_F9_SCALE:-}" in ""|0|0.0) ;; *) _NEEDS_F9=1 ;; esac
     if [ "${_NEEDS_F9}" = "1" ]; then
-      F9_TABLE_PATH="${SIM_F9_TABLE_PATH:-${TRACES_DIR}/f9_table_${SIM_GRANULARITY:-byte}_seed${SIM_F9_SEED:-2839}.npy}"
+      # SIM_F9_BIT_COEFF_SCALE controls the upper bound of U(0,s) for bit coefficients.
+      # Default 1.0: E[Var_signal]=0.667, SNR_var=0.667/sigma^2 (crossover at sigma≈0.816).
+      # Normalized 1.2247 (=sqrt(3/2)): E[Var_signal]=1.0, SNR_var=1/sigma^2 (crossover at sigma=1.0).
+      # The scale is encoded in the table filename so different normalizations never
+      # share a cached table.
+      _F9_BCS="${SIM_F9_BIT_COEFF_SCALE:-1.0}"
+      _F9_BCS_TAG=$(echo "${_F9_BCS}" | tr '.' 'p')
+      F9_TABLE_PATH="${SIM_F9_TABLE_PATH:-${TRACES_DIR}/f9_table_${SIM_GRANULARITY:-byte}_seed${SIM_F9_SEED:-2839}_bcs${_F9_BCS_TAG}.npy}"
       # Determine per-invocation trace length from global_config.
       F9_TABLE_SIZE=$(python3 -c "import sys; sys.path.insert(0,'${PROJECT_DIR}'); import global_config as c; print(c.REFERENCE_TRACE_LEN)")
       if [ ! -f "${F9_TABLE_PATH}" ]; then
-        log "F9TBL: generating ${F9_TABLE_PATH} (size=${F9_TABLE_SIZE})"
+        log "F9TBL: generating ${F9_TABLE_PATH} (size=${F9_TABLE_SIZE}, bcs=${_F9_BCS})"
         python3 "${SIM_SCRIPT}" \
           --generate-f9-table \
           --f9-table "${F9_TABLE_PATH}" \
           --f9-table-size "${F9_TABLE_SIZE}" \
           --granularity "${SIM_GRANULARITY:-byte}" \
           --f9-seed "${SIM_F9_SEED:-2839}" \
-          --f9-c8-range "${SIM_F9_C8_RANGE:-0.5}"
+          --f9-c8-range "${SIM_F9_C8_RANGE:-0.5}" \
+          --f9-bit-coeff-scale "${_F9_BCS}"
       fi
-      F9_FLAGS="--f9-table ${F9_TABLE_PATH} --f9-table-size ${F9_TABLE_SIZE} --f9-seed ${SIM_F9_SEED:-2839} --f9-c8-range ${SIM_F9_C8_RANGE:-0.5}"
+      F9_FLAGS="--f9-table ${F9_TABLE_PATH} --f9-table-size ${F9_TABLE_SIZE} --f9-seed ${SIM_F9_SEED:-2839} --f9-c8-range ${SIM_F9_C8_RANGE:-0.5} --f9-bit-coeff-scale ${_F9_BCS}"
     fi
     # Optional per-component scale overrides (omit flags when not set so the
     # simulator applies mode-appropriate defaults for backward compatibility).

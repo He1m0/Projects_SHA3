@@ -515,6 +515,37 @@ A paper-scale re-run of the seven failed values (σ = 1.0, 1.5, 2.0, 2.5, 3.0, 3
 | SHA3_SASCA_RATE_STEP_BITS | 64 | 8 | Finer oracle granularity |
 
 Env files: `pipeline_runner/envs/.env_paperscale_v2_f9_sigma{1p0,1p5,2p0,2p5,3p0,3p5,4p0}`.
+Note: these files use the default normalization (bcs=1.0, SNR_var=0.667/σ²). See §10.7.
+
+### 10.7 F₉ coefficient normalization — implementation (2026-05-07)
+
+**Problem:** The default U(0,1) bit coefficients give E[Var_signal]=2/3≈0.667, so the
+noise-equals-signal crossover falls at σ≈0.816 — a non-round value. This makes results
+harder to interpret and cross-compare.
+
+**Fix:** Added `SIM_F9_BIT_COEFF_SCALE` env variable and `--f9-bit-coeff-scale` CLI flag
+to `KeccakSim_v2.py`. Setting this to √(3/2)≈1.2247 draws bit coefficients from
+U(0, 1.2247), giving E[Var_signal]=1.0 and SNR_var=1/σ² with crossover at σ=1.0 exactly.
+
+Default remains 1.0 for backward compatibility — all runs through 2026-05-07 reproduce
+byte-identically with no env file changes.
+
+The F9 table filename encodes the scale (`bcs1p0`, `bcs1p2247`) to prevent stale cache
+hits when switching normalization within the same TRACES_DIR.
+
+**SNR comparison across normalizations:**
+
+| σ | SNR_var (bcs=1.0, old) | SNR_var (bcs=1.2247, normalized) |
+|---|---|---|
+| 0.5 | 2.67 | 4.0 |
+| 0.816 | 1.0 (crossover) | 1.5 |
+| 1.0 | 0.667 | **1.0 (crossover)** |
+| 1.5 | 0.296 | 0.444 |
+| 2.0 | 0.167 | 0.25 |
+
+**New env files:** `.env_smoke_v2_f9_norm_sigma{0p5…4p0}` — same sigma grid as the
+unnormalized smoke sweep, with `SIM_F9_BIT_COEFF_SCALE=1.2247`. These produce the
+normalized reference sweep.
 
 ---
 

@@ -42,21 +42,43 @@ _BITS256 = np.array(
 # F9 table utilities
 # ---------------------------------------------------------------------------
 
-def generate_f9_table(table_size, granularity, f9_seed, c8_range):
+def generate_f9_table(table_size, granularity, f9_seed, c8_range,
+                      bit_coeff_scale=1.0):
     """Return a (table_size, n_coeffs) float64 array of F9 coefficients.
 
     n_coeffs = 9 (byte) or 33 (word).
-    Columns 0..n-2 are bit coefficients drawn from U(0, 1).
+
+    Columns 0..n-2 are bit coefficients drawn from U(0, bit_coeff_scale).
     Column -1 is the per-position intercept drawn from U(-c8_range, +c8_range).
+
+    The bit_coeff_scale parameter controls the expected signal variance:
+
+        E[Var_signal] = n_bits * E[ci^2] * Var(bi)
+                      = n_bits * (bit_coeff_scale^2 / 3) * 0.25
+                      = n_bits * bit_coeff_scale^2 / 12
+
+    For n_bits=8 (byte granularity):
+        E[Var_signal] = 2 * bit_coeff_scale^2 / 3
+
+    Default (bit_coeff_scale=1.0):  E[Var_signal] = 2/3 ≈ 0.667
+        SNR_var = 0.667 / sigma^2   (crossover SNR=1 at sigma ≈ 0.816)
+
+    Normalized (bit_coeff_scale=sqrt(3/2) ≈ 1.2247):  E[Var_signal] = 1.0
+        SNR_var = 1.0 / sigma^2     (crossover SNR=1 at sigma = 1.0 exactly)
+
+    Use SIM_F9_BIT_COEFF_SCALE=1.2247 in env files to get the normalized form.
+    All runs without this variable used the default (1.0); their sigma values
+    map to SNR_var = 0.667/sigma^2.
     """
     rng = np.random.default_rng(int(f9_seed))
     n_bits = 8 if granularity == "byte" else 32
-    coeffs = rng.uniform(0.0, 1.0, size=(table_size, n_bits))
+    coeffs = rng.uniform(0.0, float(bit_coeff_scale), size=(table_size, n_bits))
     intercepts = rng.uniform(-float(c8_range), float(c8_range), size=(table_size, 1))
     return np.concatenate([coeffs, intercepts], axis=1).astype(np.float64)
 
 
-def load_or_generate_f9_table(path, table_size, granularity, f9_seed, c8_range):
+def load_or_generate_f9_table(path, table_size, granularity, f9_seed, c8_range,
+                               bit_coeff_scale=1.0):
     """Load table from *path* if it exists; otherwise generate and save it."""
     p = Path(path)
     n_coeffs = 9 if granularity == "byte" else 33
@@ -68,7 +90,8 @@ def load_or_generate_f9_table(path, table_size, granularity, f9_seed, c8_range):
                 "({}, {})".format(p, table.shape, table_size, n_coeffs)
             )
         return table
-    table = generate_f9_table(table_size, granularity, f9_seed, c8_range)
+    table = generate_f9_table(table_size, granularity, f9_seed, c8_range,
+                               bit_coeff_scale)
     p.parent.mkdir(parents=True, exist_ok=True)
     np.save(p, table)
     return table
@@ -898,6 +921,13 @@ def _build_cli_parser():
                    help="RNG seed for F9 table generation (default: 2839)")
     p.add_argument("--f9-c8-range", type=float, default=0.5,
                    help="Half-width of U(-r,+r) for F9 intercept column (default: 0.5)")
+    p.add_argument("--f9-bit-coeff-scale", type=float, default=1.0,
+                   help="Upper bound of U(0,s) for F9 bit coefficients (default: 1.0). "
+                        "Set to sqrt(3/2)≈1.2247 for normalized E[Var_signal]=1.0, "
+                        "i.e. SNR_var=1/sigma^2 with crossover at sigma=1. "
+                        "All runs without this flag used the default (1.0), giving "
+                        "SNR_var=0.667/sigma^2 with crossover at sigma≈0.816. "
+                        "Env var: SIM_F9_BIT_COEFF_SCALE.")
     p.add_argument("--generate-f9-table", action="store_true",
                    help="Generate and save F9 table then exit (requires --f9-table and --f9-table-size)")
     # RNG
@@ -966,7 +996,8 @@ def main():
             parser.error("--generate-f9-table requires --f9-table PATH")
         if not args.f9_table_size:
             parser.error("--generate-f9-table requires --f9-table-size N")
-        table = generate_f9_table(args.f9_table_size, args.granularity, args.f9_seed, args.f9_c8_range)
+        table = generate_f9_table(args.f9_table_size, args.granularity, args.f9_seed,
+                                   args.f9_c8_range, args.f9_bit_coeff_scale)
         p = Path(args.f9_table)
         p.parent.mkdir(parents=True, exist_ok=True)
         np.save(p, table)
@@ -997,7 +1028,8 @@ def main():
                     "F9 table '{}' does not exist; provide --f9-table-size to create it".format(args.f9_table)
                 )
         f9_table = load_or_generate_f9_table(
-            args.f9_table, table_size or 1, args.granularity, args.f9_seed, args.f9_c8_range
+            args.f9_table, table_size or 1, args.granularity, args.f9_seed,
+            args.f9_c8_range, args.f9_bit_coeff_scale
         )
 
     sim = KeccakTraceSimulator(
