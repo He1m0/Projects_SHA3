@@ -1,6 +1,6 @@
 # SHA-3 Template Attack — Complete Findings
 
-**Coverage:** 2026-04-24 (reference run) through 2026-05-05 (v2 results).
+**Coverage:** 2026-04-24 (reference run) through 2026-05-07 (sigma sweep + SNR analysis).
 **Source documents** (kept separately, unchanged):
 - `findings_2026-04-27.md` — verbatim timestamped raw notes
 - `findings_2026-04-27_restructured.md` — restructured Apr 24 – May 4 findings
@@ -200,6 +200,26 @@ Six smoke-scale runs launched on remote host for definitive 3-way comparison.
 
 See §7 below for complete results.
 
+### May 6 — Scale Sweep + Mixed Modes; σ=0.01 Discovery; Realnoise Sweep Launched
+
+**Morning: 9 additional v2 runs archived and compared.** Six runs from May 5 afternoon
+(f9_scale0p1/0p2/0p5, hw_f9, hd_f9, hw_hd_f9) completed overnight. All archived to
+`runs_archive/2026-05-06_smoke_v2_*`. See §8 for complete results.
+
+Key findings:
+- F_9 scale is irrelevant down to 0.1× (A: 99.4%→98.7%; SASCA flat 100% at all scales).
+- Adding HW to F_9 is negligible (A: 99.5%; SASCA unchanged).
+- HD_add=0.5 is the dominant degrader: A drops to 60.3% but SASCA still flat 100%.
+- Every F_9-containing run (7 total) achieves 50/50 at all 21 rate points, all depths.
+
+**Afternoon: σ=0.01 identified as the correct realistic noise level.** All previous v2
+runs used σ=0.0007, which is ~14× below the pipeline default and the level used in
+every prior "realnoise" and "paperscale" environment. The v2 simulator has no
+gain/offset jitter (legacy-only feature) so σ is the only noise knob.
+
+**Six realnoise sweep runs launched** on IDP server (tmux sessions v2_f9_realnoise
+through v2_hd1p0_f9_midnoise). See §9 for design rationale. Results pending.
+
 ---
 
 ## 6) The v1 F_9 Bug — Root Cause Analysis
@@ -270,7 +290,7 @@ test suite is recommended before any future model comparisons.
 
 ---
 
-## 7) v2 3-Way Comparison — Complete Results
+## 7) v2 3-Way Comparison — Complete Results (May 5)
 
 All three runs: smoke scale, σ=0.0007, SHA3_INPUTS=16, SHA3_INVOCATIONS=10,
 SHA3_TRAINING_SET_COUNT=50, SHA3_VALIDATION_INPUTS=10.
@@ -319,7 +339,186 @@ HW/HD: degrade to 0/50 by rate_point ~9.
 
 ---
 
-## 8) What These Results Mean
+## 8) v2 Scale Sweep + Mixed Modes (May 6)
+
+All runs: smoke scale, SHA3_INPUTS=16, SHA3_INVOCATIONS=10, TRAINING_SET_COUNT=50,
+σ=0.0007 (low-noise; the realistic σ=0.01 sweep is in progress — see §9).
+
+### Template Quality (0004)
+
+| Config | HW | F_9 | HD | A SR | B SR | C SR | D SR |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| v2 HW (baseline) | 1.0 | 0 | 0 | 4.4% | 3.1% | 1.6% | 2.5% |
+| v2 HD+add (baseline) | 0 | 0 | 0.5 | 4.1% | 3.0% | 2.6% | 1.9% |
+| v2 F_9 1.0× (baseline) | 0 | 1.0 | 0 | 99.4% | 25.4% | 10.0% | 2.2% |
+| v2 F_9 0.5× | 0 | 0.5 | 0 | 99.5% | 25.4% | 10.3% | 2.2% |
+| v2 F_9 0.2× | 0 | 0.2 | 0 | 99.3% | 25.4% | 10.5% | 2.2% |
+| v2 F_9 0.1× | 0 | 0.1 | 0 | 98.7% | 25.4% | 10.5% | 2.2% |
+| v2 HW+F_9 | 1.0 | 1.0 | 0 | 99.5% | 23.7% | 8.3% | 3.5% |
+| v2 HD+F_9 | 0 | 1.0 | 0.5 | 60.3% | 11.1% | 4.6% | 1.3% |
+| v2 HW+HD+F_9 | 1.0 | 1.0 | 0.5 | 59.3% | 9.7% | 5.9% | 2.1% |
+
+### SASCA Rate_Scan (all 21 rate points, 50 traces, 2R/3R/4R)
+
+Every F_9-containing configuration: **50/50 at all 21 rate points, all three round
+depths.** Array is a flat [50,50,...,50] in every case. No exceptions.
+
+HW and HD baselines: degrade to 0/50 by rate_point ~8–9 (same as §7).
+
+### Findings
+
+**F_9 scale is irrelevant down to 0.1×.** Cutting F_9 amplitude to 10% of full
+scale (with σ=0.0007) changes A-SR by only −0.7 pp and does not affect SASCA. The
+attack is not amplitude-sensitive at this noise level.
+
+**HW mixed with F_9 is negligible.** HW+F_9 ≈ pure F_9 across all metrics. HW
+contributes noise variance but no conflicting signal; LDA finds F_9 regardless.
+
+**HD_add=0.5 is the dominant template-quality degrader.** It creates a conflicting
+signal at the same PoIs as F_9 (both leak at each clock sample, different byte
+functions). LDA partially decorrelates them but not completely: A drops 99.4%→60.3%.
+Adding HW on top (HW+HD+F_9) barely changes this (59.3%).
+
+**SASCA is robust to HD-induced template degradation.** Despite A-SR dropping from
+99.4% to 60%, SASCA still achieves 50/50 at all rate points. The BP factor graph
+only needs the LLR product to be consistently positive on average; 60% first-order
+SR is well above the effective threshold.
+
+**Implication for real silicon (A=35.7%):** The real chip's 35.7% A-SR is consistent
+with a mixed F_9+HD model at higher degradation than tested so far, or with the
+realistic noise level (σ=0.01) not yet applied to v2. Both axes are covered by the
+§9 realnoise sweep.
+
+---
+
+## 9) Realnoise Sweep — In Progress (May 6)
+
+### Why σ=0.0007 is wrong
+
+The v2 runs through May 6 all used σ=0.0007. This is ~14× below the pipeline
+default and the level used in every "realnoise" and "paperscale" v1 profile. The
+pipeline's v2 invocation line is:
+
+```sh
+--noise-sigma "${SIM_NOISE_SIGMA:-0.01}"   # default is 0.01, not 0.0007
+```
+
+The v2 simulator has no gain/offset jitter (those parameters exist only in the
+legacy `KeccakSim_BI_TA.py` invocation). σ is the only noise knob in v2.
+
+σ=0.0007 is the "ideal / low-noise" smoke setting carried over from v1 runs.
+**σ=0.01 is the correct realistic operating point going forward.**
+
+### Six runs launched (IDP server, tmux sessions)
+
+| Session | HW | F_9 | HD | σ | Purpose |
+|---|---:|---:|---:|---:|---|
+| `v2_f9_realnoise` | 0 | 1.0 | 0 | **0.01** | Pure F_9 realistic-noise baseline (never run before) |
+| `v2_hd0p5_f9_realnoise` | 0 | 1.0 | 0.5 | **0.01** | HD=0.5+F_9 at realistic σ vs existing (60.3%, σ=0.0007) |
+| `v2_hd1p0_f9_realnoise` | 0 | 1.0 | 1.0 | **0.01** | Primary calibration candidate for A≈35% |
+| `v2_hd2p0_f9_realnoise` | 0 | 1.0 | 2.0 | **0.01** | Aggressive HD; expected SASCA stress zone |
+| `v2_hw_hd1p0_f9_realnoise` | 1.0 | 1.0 | 1.0 | **0.01** | Most physically realistic 3-way mix |
+| `v2_hd1p0_f9_midnoise` | 0 | 1.0 | 1.0 | **0.005** | HD=1.0 at midpoint σ; separates σ vs HD contributions |
+
+### Expected outcomes
+
+Running the 2×2 of (HD=0.5 vs 1.0) × (σ=0.005 vs 0.01) at fixed F_9=1.0 lets us
+read off σ and HD contributions independently. The pure F_9 at σ=0.01 baseline
+(session 1) is the single most important data point: if it still gives ~99% A-SR,
+σ is not the explanation for the real-silicon gap and HD is. If it drops significantly,
+σ alone may explain part of the 35.7% real-silicon ceiling.
+
+Results pending. Expected runtime: several hours (same scale as prior smoke runs).
+
+---
+
+## 10) F₉ Noise (Sigma) Sweep — Results and SNR Analysis (May 7)
+
+### 10.1 What we ran
+
+Eight smoke-scale runs varying SIM_NOISE_SIGMA from 0.5 to 4.0 in 0.5 steps,
+plus the May 5 near-zero anchor (σ=0.0007). All pure F₉, SHA3_TRAINING_SET_COUNT=50,
+SHA3_SASCA_TRACE_COUNT=50. Archived to `runs_archive/2026-05-07_smoke_v2_f9_sigma*`.
+
+### 10.2 Results
+
+First-order A-SR and SASCA Rate_Scan at each noise level:
+
+| σ | A-SR | SNR_var | 2R last pt | 3R last pt | 4R last pt |
+|---|---:|---:|---:|---:|---:|
+| 0.0007 (anchor) | 99.4% | 1,360,000 | 20/20 | 20/20 | 20/20 |
+| 0.5 | 13.5% | 2.67 | 15/20 | 18/20 | 20/20 |
+| 1.0 | 4.9% | 0.667 | 5/20 | 5/20 | 5/20 |
+| 1.5 | 2.7% | 0.296 | 3/20 | 3/20 | 3/20 |
+| 2.0 | 1.8% | 0.167 | 2/20 | 2/20 | 1/20 |
+| 2.5 | 1.3% | 0.107 | 1/20 | 1/20 | 1/20 |
+| 3.0–4.0 | ≈1.4% | 0.074–0.042 | degenerate | degenerate | degenerate |
+
+σ=0.5 is the only value where 4R round depth rescues a failed 2R result (15→20/20).
+From σ=1.0 onward, adding round depth gives no benefit. σ=3.0–4.0 are identical
+across all metrics — suspected ICS detection failure, not a noise measurement (§10.4).
+
+### 10.3 Why the degradation was steep — SNR analysis
+
+The F₉ bit coefficients in `KeccakSim_v2.py` are drawn from **U(0, 1)** (not
+U(-0.5,+0.5) as earlier stated — the SIM_F9_C8_RANGE parameter only controls the
+intercept c₈). The between-class signal variance per PoI is:
+
+```
+Var_b[Σ bᵢ cᵢ] = 8 · E[cᵢ²] · Var(bᵢ) = 8 · (1/3) · 0.25 = 2/3 ≈ 0.667
+signal_std ≈ 0.816 per PoI        (SNR_var = 0.667 / σ²)
+```
+
+**SNR_var crosses 1 at σ≈0.816** (between σ=0.5 and σ=1.0). At σ=0.5 the signal
+still has 2.67× variance advantage; at σ=1.0 the noise dominates (SNR_var=0.667).
+A 13.5% A-SR at σ=0.5 (SNR_var=2.67) is acceptable; the rapid collapse at σ=1.0
+is expected given the noise then exceeds signal.
+
+**Comparison with the May 6 scale sweep:** reducing F₉ amplitude to 0.1× at σ=0.0007
+still gave SNR_var ≈ 13,600 — thirteen thousand times above unity. The scale sweep never
+touched realistic noise territory. The sigma sweep is the first time the pipeline is
+tested at SNR levels comparable to real hardware.
+
+### 10.4 Template estimation is not the bottleneck
+
+The F₉ regression estimates 9 coefficients per PoI from all training traces jointly.
+At smoke scale (8,000 traces) and σ=1.0, coefficient estimation error is
+σ/√N = 1.0/√8,000 ≈ 0.011 — small relative to typical coefficient magnitude (≈0.5).
+**Templates are already well-estimated at smoke scale.** Failure at σ≥1.0 is due to
+test-time classification noise: at SNR_var=0.667, a single test trace has noise
+comparable to signal, and a single-trace classification into 256 byte hypotheses
+has very low probability of success regardless of template quality.
+
+**Implication for paper scale:** upgrading to 400 training sets (8×) will not
+significantly improve first-order SR. The dominant benefit is for SASCA — 1,000
+SASCA test traces (vs 50 at smoke) give BP 20× more evidence to aggregate over weak
+per-trace LLRs.
+
+### 10.5 σ=3.0–4.0 degenerate results
+
+All three runs return byte-identical SR/GE and Rate_Scan histograms. Most likely the
+ICS detection stage (0002) finds no sample points above the R² threshold (min=0.09)
+at these noise levels, causing the pipeline to fall into a reproducible degenerate
+state. These runs are not measuring noise robustness — they are measuring pipeline
+failure mode behavior and should be verified by inspecting ICS archive sizes.
+
+### 10.6 Paper-scale sigma sweep design
+
+A paper-scale re-run of the seven failed values (σ = 1.0, 1.5, 2.0, 2.5, 3.0, 3.5,
+4.0) has been prepared. Key differences from the smoke sweep:
+
+| Parameter | Smoke | Paper | Reason |
+|---|---:|---:|---|
+| SHA3_TRAINING_SET_COUNT | 50 | 400 | 8× — modest template improvement |
+| SHA3_SASCA_TRACE_COUNT | 50 | 1,000 | 20× — primary expected gain |
+| SHA3_SASCA_RATE_POINT_COUNT | 21 | 201 | Higher-resolution curve |
+| SHA3_SASCA_RATE_STEP_BITS | 64 | 8 | Finer oracle granularity |
+
+Env files: `pipeline_runner/envs/.env_paperscale_v2_f9_sigma{1p0,1p5,2p0,2p5,3p0,3p5,4p0}`.
+
+---
+
+## 11) What the v2 Results Mean
 
 ### The attack pipeline is validated
 
@@ -339,18 +538,23 @@ coefficient structure (per-bit, per-position) is the dominant signal.
 The counter-intuitive result (theoretically correct F_9 < theoretically wrong collapsed
 pbw) was an implementation bug, not a statement about F_9 physics.
 
-### The remaining gap is leakage coefficient estimation
+### The remaining gap is leakage coefficient estimation and noise matching
 
 Real silicon A=35.7% is well above HW (4.4%) and well below the self-consistent F_9
-ceiling (99.7%). The gap is now characterized as: how accurately can we estimate
-the real hardware's per-position F_9 coefficients from oscilloscope data? This is
-exactly the profiling problem in You & Kuhn 2022.
+ceiling (99.7%). At the low-noise operating point (σ=0.0007) the gap is explained
+by either: (a) the real chip has weaker or noisier F_9 coefficients, (b) the real
+chip has additive HD interference, or (c) σ=0.01 alone already partially explains
+the gap. The §9 realnoise sweep is designed to separate these.
+
+The deeper question — how accurately can we estimate the real hardware's per-position
+F_9 coefficients from oscilloscope data — is exactly the profiling problem in
+You & Kuhn 2022 and remains the next hardware step.
 
 ---
 
-## 9) All Findings Tables
+## 11) All Findings Tables
 
-### 9.1 First-Order SR by Family (0004)
+### 11.1 First-Order SR by Family (0004)
 
 Random baseline = 1/256 ≈ 0.39%.
 
@@ -372,12 +576,21 @@ Random baseline = 1/256 ≈ 0.39%.
 | F_9 v1 + additive HD 0.5 | ~5.1% | 2.82% | 2.24% | 1.21% | best of HD variants |
 | v2 HW | 4.4% | 3.1% | 1.6% | — | KeccakSim v2, pure HW |
 | v2 HW+HD (scale=0.5) | 4.1% | 3.0% | 2.6% | 2.1% | v2 additive HD |
-| **v2 F_9** | **99.7%** | **25.5%** | **10.0%** | **2.1%** | **v2 correct F_9** |
+| **v2 F_9** | **99.7%** | **25.5%** | **10.0%** | **2.1%** | **v2 correct F_9, σ=0.0007** |
+| v2 F_9 0.1× | 98.7% | 25.4% | 10.5% | 2.2% | F_9 scale=0.1, σ=0.0007 |
+| v2 HW+F_9 | 99.5% | 23.7% | 8.3% | 3.5% | HW+F_9, σ=0.0007 |
+| v2 HD+F_9 | 60.3% | 11.1% | 4.6% | 1.3% | HD_add=0.5+F_9, σ=0.0007 |
+| v2 HW+HD+F_9 | 59.3% | 9.7% | 5.9% | 2.1% | all three, HD=0.5, σ=0.0007 |
+| *(realnoise sweep)* | *TBD* | — | — | — | *σ=0.01, various HD; §9* |
+| v2 F₉ σ=0.5 | 13.5% | 18.1 | 6.0% | 37.1 | 4.0% | 43.9 | 1.6% | 68.6 | smoke, σ=0.5, SNR_var=2.67 |
+| v2 F₉ σ=1.0 | 4.9% | 42.4 | 2.7% | 61.2 | 2.1% | 66.2 | 1.1% | 86.1 | smoke, σ=1.0, SNR_var=0.667 |
+| v2 F₉ σ=2.0 | 1.8% | 74.9 | 1.1% | 93.2 | 1.1% | 90.9 | 0.7% | 104.6 | smoke, near baseline |
+| v2 F₉ σ=2.5 | 1.3% | 86.7 | 0.8% | 101.9 | 0.9% | 100.1 | 0.6% | 110.8 | smoke, at baseline |
 
 **Key observation:** paperscale_widerpbw ≡ smoke_widerpbw at 0004 (within noise).
 8× more training traces ≈ zero improvement. Scale is not the bottleneck.
 
-### 9.2 SASCA Summary (0005)
+### 11.2 SASCA Summary (0005)
 
 Iteration_Scan maximum success rate (smoke, 50 traces):
 
@@ -392,6 +605,7 @@ Iteration_Scan maximum success rate (smoke, 50 traces):
 | v2 HW | ~96% | ~96% | ~96% |
 | v2 HW+HD | ~96% | ~96% | ~96% |
 | **v2 F_9** | **100%** | **100%** | **100%** |
+| v2 F_9 0.1×, HW+F_9, HD+F_9, HW+HD+F_9 | **100%** | **100%** | **100%** |
 
 Rate_Scan: first rate point where success drops below 100%:
 
@@ -401,7 +615,7 @@ Rate_Scan: first rate point where success drops below 100%:
 | v2 HW+HD | 3–4 | 192–256 b |
 | **v2 F_9** | **never** | **0 (pure template)** |
 
-### 9.3 Round-Averaged 0004 (recent runs)
+### 11.3 Round-Averaged 0004 (recent runs)
 
 Values are round-averaged across all four rounds per family (A00–A03 etc.).
 
@@ -416,7 +630,7 @@ Values are round-averaged across all four rounds per family (A00–A03 etc.).
 
 ---
 
-## 10) Causal Attribution
+## 12) Causal Attribution
 
 | Knob / change | Why changed | Result | Status |
 |---|---|---|---|
@@ -431,10 +645,15 @@ Values are round-averaged across all four rounds per family (A00–A03 etc.).
 | Additive HD on F_9 v1 | Additive transition power | A ~5.1%; partial improvement | Real effect; not primary |
 | Signed c_l ∈ U(-1,1) | Coefficient sign sensitivity | F_9 < collapsed persists | Not the issue |
 | **v2 F_9 (correct)** | **Bug-free implementation** | **A=99.7%; SASCA 100%** | **Validates methodology** |
+| F_9 scale 1.0→0.1× | Test amplitude sensitivity | A: 99.4%→98.7%; SASCA unchanged | Scale irrelevant at σ=0.0007 |
+| HD_add=0.5 + F_9 | Test HD interference | A: 99.4%→60.3%; SASCA unchanged | HD is main degrader |
+| σ 0.0007→0.01 (v2) | Correct to realistic noise | **TBD (realnoise sweep in progress)** | Pending |
+| σ sweep 0.5–4.0 (smoke) | Characterise noise robustness | A: 99.4%→1.3% monotone; SASCA collapses at σ≥1.0 | Done; SNR_var crosses 1 at σ≈0.816 |
+| σ sweep 1.0–4.0 (paper) | 20× SASCA traces at failed sigma | **Pending — envs prepared** | Pending |
 
 ---
 
-## 11) Ruled-Out Hypotheses
+## 13) Ruled-Out Hypotheses
 
 | Hypothesis | Test | Result | Evidence |
 |---|---|---|---|
@@ -446,22 +665,28 @@ Values are round-averaged across all four rounds per family (A00–A03 etc.).
 | HD substitution helps | smoke_hd_ics40 | **NEGATIVE** | A: 9.39%→6.04%; SASCA SR=0%; Apr 29 |
 | Additive HD (v2 clean test) | v2 HW+HD vs v2 HW | **NEGATIVE** | A: 4.4%→4.1% (slightly worse); May 5 |
 | F_9 model physics are inferior | v2 F_9 (correct impl.) | **DISPROVEN** | A=99.7%; was a bug in v1 |
+| F_9 amplitude matters (scale sensitivity) | F_9 scale 0.1–1.0× sweep | **NULL** | A flat at 98.7–99.5%; May 6 |
+| HW leakage mixed with F_9 degrades SASCA | HW+F_9 vs pure F_9 | **NULL** | A: 99.5%; SASCA unchanged; May 6 |
 
 ---
 
-## 12) What Remains Open
+## 14) What Remains Open
 
 | Question | Status |
 |---|---|
-| Can F_9 coefficients be estimated from real traces? | Next step: profiling on ChipWhisperer hardware |
-| Does v2 F_9 hold at paperscale? | Not run; not necessary for current goal |
+| Does pure F_9 hold at σ=0.01 (realistic noise)? | **In progress** — v2_f9_realnoise running |
+| Where does SASCA fail under HD+σ? | **In progress** — HD=1.0/2.0 at σ=0.01 running |
+| Which knob explains real silicon A=35.7%: σ or HD? | **In progress** — §9 sweep |
+| Can F_9 coefficients be estimated from real traces? | Next step: hardware profiling on ChipWhisperer |
 | Why is D weak (2.1%) even under F_9? | Chi step inherently hardest; SASCA tolerates it |
 | No-noise v2 variants crashed at LDA | Singular matrix with σ=0; expected, not a bug |
-| Does multi-cycle per-op emission help? | Superseded by F_9 result; lower priority now |
+| Does 20× SASCA trace count rescue σ=1.0–2.5 SASCA? | **Pending** — paper-scale sigma sweep envs prepared |
+| Why are σ=3.0–4.0 results identical? ICS failure? | Suspected ICS detection collapse; needs ICS archive check |
+| At what σ does v2 F₉ match real silicon A=35.7%? | Estimated σ≈0.5–1.0 range; pending paper-scale sweep |
 
 ---
 
-## 13) Numbers at a Glance
+## 15) Numbers at a Glance
 
 | Metric | HW-only baseline | Best pre-v2 | v2 F_9 | Real silicon |
 |---|---:|---:|---:|---:|
@@ -477,7 +702,7 @@ Random baseline = 1/256 ≈ 0.39%. "Pure template" = no oracle-revealed bits.
 
 ---
 
-## 14) Decision Framework for New Results
+## 16) Decision Framework for New Results
 
 1. Check 0004 family SR, especially A-family and the bimodality pattern (anchor bytes
    at SR≈1 vs unimodal distribution?).
@@ -491,7 +716,7 @@ Random baseline = 1/256 ≈ 0.39%. "Pure template" = no oracle-revealed bits.
 
 ---
 
-## 15) Archived Runs (local)
+## 17) Archived Runs (local)
 
 | Archive | Date | Notes |
 |---|---|---|
@@ -505,3 +730,9 @@ Random baseline = 1/256 ≈ 0.39%. "Pure template" = no oracle-revealed bits.
 | `2026-05-05_smoke_v2_hw_noise` | May 5 | **v2 HW, σ=0.0007** |
 | `2026-05-05_smoke_v2_hd_noise` | May 5 | **v2 HW+HD, σ=0.0007** |
 | `2026-05-05_smoke_v2_f9_noise` | May 5 | **v2 F_9, σ=0.0007 — primary result** |
+| `2026-05-06_smoke_v2_f9_scale0p1/0p2/0p5_noise` | May 6 | F_9 scale sweep 0.1–0.5×; all flat 100% SASCA |
+| `2026-05-06_smoke_v2_hw_f9_noise` | May 6 | HW+F_9; A=99.5%; SASCA flat |
+| `2026-05-06_smoke_v2_hd_f9_noise` | May 6 | HD=0.5+F_9; A=60.3%; SASCA flat |
+| `2026-05-06_smoke_v2_hw_hd_f9_noise` | May 6 | HW+HD=0.5+F_9; A=59.3%; SASCA flat |
+| *(v2_f9_realnoise through v2_hd1p0_f9_midnoise)* | May 6 | **In progress — σ=0.01 realnoise sweep** |
+| `2026-05-07_smoke_v2_f9_sigma0p5` through `_sigma4p0` | May 7 | σ sweep 0.5–4.0; smoke scale; all archived |
