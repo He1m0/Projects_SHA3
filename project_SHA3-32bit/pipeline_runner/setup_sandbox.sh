@@ -115,9 +115,9 @@ for F in "${PROJ_SRC}/pipeline_runner/"*.sh \
           "${PROJ_SRC}/pipeline_runner/"*.md; do
   [ -f "$F" ] && cp "$F" "${PROJ_DEST}/pipeline_runner/"
 done
-for F in "${PROJ_SRC}/pipeline_runner/envs/"*; do
-  [ -f "$F" ] && cp "$F" "${PROJ_DEST}/pipeline_runner/envs/"
-done
+# Use find to include dotfiles (.env_*) which shell glob * misses.
+find "${PROJ_SRC}/pipeline_runner/envs/" -maxdepth 1 -type f \
+  -exec cp {} "${PROJ_DEST}/pipeline_runner/envs/" \;
 
 # Bit_Tables
 if [ -d "${PROJ_SRC}/Bit_Tables" ]; then
