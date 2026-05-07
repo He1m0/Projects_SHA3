@@ -543,9 +543,13 @@ hits when switching normalization within the same TRACES_DIR.
 | 1.5 | 0.296 | 0.444 |
 | 2.0 | 0.167 | 0.25 |
 
-**New env files:** `.env_smoke_v2_f9_norm_sigma{0p5…4p0}` — same sigma grid as the
-unnormalized smoke sweep, with `SIM_F9_BIT_COEFF_SCALE=1.2247`. These produce the
-normalized reference sweep.
+**New env files:** `.env_smoke_v2_f9_norm_sigma{0p5…4p0}` — σ steps from 0.5 to 4.0
+in 0.5 increments, with `SIM_F9_BIT_COEFF_SCALE=1.2247`. The σ values are the same
+numbers as the unnormalized sweep but map to different (1.5×higher) SNR at each step
+— they are not equivalent runs. The σ grid was chosen for clean labels (SNR=1/σ²),
+not to reproduce the unnormalized results at equal SNR.
+Also created: `.env_paperscale_v2_f9_norm_sigma{1p0…4p0}` — paper-scale equivalents
+(400 training sets, 1000 SASCA traces, 201 rate points). Not yet started.
 
 ---
 
