@@ -144,7 +144,13 @@ for STAGE_DIR in "${PROJ_SRC}/0001_reference" \
                 "${STAGE_DIR}"/Iteration_Scan_* \
                 "${STAGE_DIR}"/Rate_Scan_*; do
     [ -d "${SUBDIR}" ] || continue
-    cp -r "${SUBDIR}" "${STAGE_DEST}/$(basename "${SUBDIR}")"
+    DEST_SUBDIR="${STAGE_DEST}/$(basename "${SUBDIR}")"
+    mkdir -p "${DEST_SUBDIR}"
+    # Copy only code/script files; skip data artifacts (*.zip, *.npy, *.hdf5)
+    # so that pre-existing pipeline outputs in the source repo don't short-circuit
+    # the pipeline's idempotency checks in the new sandbox.
+    find "${SUBDIR}" -maxdepth 1 -type f ! -name '*.zip' ! -name '*.npy' ! -name '*.hdf5' \
+      -exec cp {} "${DEST_SUBDIR}/" \;
   done
   echo "  copied ${STAGE_NAME}/"
 done
