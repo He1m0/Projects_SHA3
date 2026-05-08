@@ -90,6 +90,15 @@ fi
 echo "Creating sandbox: ${SANDBOX}"
 mkdir -p "${SANDBOX}"
 
+# --- venv symlink: point .venv -> repo venv so script_all.sh finds python with h5py etc. ---
+for VENV_CANDIDATE in "${REPO_SRC}/.venv" "${REPO_SRC}/venv"; do
+  if [ -d "${VENV_CANDIDATE}" ]; then
+    ln -sfn "${VENV_CANDIDATE}" "${SANDBOX}/.venv"
+    echo "  linked .venv -> ${VENV_CANDIDATE}"
+    break
+  fi
+done
+
 # --- simulator scripts at sandbox root ---
 for SIM in "${REPO_SRC}/KeccakSim_v2.py" "${REPO_SRC}/KeccakSim_BI_TA.py"; do
   if [ -f "${SIM}" ]; then
