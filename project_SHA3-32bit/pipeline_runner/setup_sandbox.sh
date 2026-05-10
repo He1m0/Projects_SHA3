@@ -160,9 +160,12 @@ for STAGE_DIR in "${PROJ_SRC}/0001_reference" \
     # the pipeline's idempotency checks in the new sandbox.
     find "${SUBDIR}" -maxdepth 1 -type f ! -name '*.zip' ! -name '*.npy' ! -name '*.hdf5' \
       -exec cp {} "${DEST_SUBDIR}/" \;
-    # rhopi_bit/ holds pre-computed supplement tables (not pipeline outputs): always copy.
+    # rhopi_bit/ and Bits.npy are pre-computed supplement tables (not pipeline outputs): always copy.
     if [ -d "${SUBDIR}/rhopi_bit" ]; then
       cp -r "${SUBDIR}/rhopi_bit" "${DEST_SUBDIR}/"
+    fi
+    if [ -f "${SUBDIR}/Bits.npy" ]; then
+      cp "${SUBDIR}/Bits.npy" "${DEST_SUBDIR}/"
     fi
   done
   echo "  copied ${STAGE_NAME}/"
