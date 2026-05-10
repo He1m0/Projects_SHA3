@@ -15,8 +15,6 @@ import global_config as cfg
 ICS_WINDOW = cfg.TRAINING_ICS_WINDOW
 PART_COUNT = cfg.TRAINING_PART_COUNT
 ICS_LEVEL = str(cfg.TRAINING_ICS_LEVEL).zfill(3)
-ICS_WORDS_AB = cfg.DETECTION_ICS_WORDS_AB
-ICS_WORDS_CD = cfg.DETECTION_ICS_WORDS_CD
 
 ICS_DIR = 'ics_original_'+ICS_LEVEL+'/'
 
@@ -59,10 +57,10 @@ class IOPS_Extractor:
     return
   
   def get_round(self, RD):
-    self.get_state('A'+str(RD).zfill(2), 0, ICS_WORDS_AB)
-    self.get_state('B'+str(RD).zfill(2), 0, ICS_WORDS_AB)
-    self.get_state('C'+str(RD).zfill(2), 0, ICS_WORDS_CD)
-    self.get_state('D'+str(RD).zfill(2), 0, ICS_WORDS_CD)
+    self.get_state('A'+str(RD).zfill(2), 0, 50)
+    self.get_state('B'+str(RD).zfill(2), 0, 50)
+    self.get_state('C'+str(RD).zfill(2), 0, 10)
+    self.get_state('D'+str(RD).zfill(2), 0, 10)
     return
     
 if __name__=='__main__':
