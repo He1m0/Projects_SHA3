@@ -1,15 +1,17 @@
 """KeccakSim_v2.py — Clean Keccak-f[1600] trace simulator.
 
-Three leakage modes — all are sums of independently scaled components:
+Four leakage modes — all are sums of independently scaled components:
 
   hw    — hw_scale × HW(value) + hd_add_scale × HD(value, prev) + noise
   f9    — f9_scale × F9(value, t) + hd_add_scale × HD(value, prev) + noise
   mixed — hw_scale × HW(value) + f9_scale × F9(value, t)
           + hd_add_scale × HD(value, prev) + noise
+  id    — id_scale × value + hd_add_scale × HD(value, prev) + noise
+          (raw data value leaks directly; byte mode emits each byte as-is)
 
-  hw_scale / f9_scale default to 1.0/0.0 (hw) or 0.0/1.0 (f9) for backward
-  compatibility. Pass --hw-scale / --f9-scale (or SIM_HW_SCALE / SIM_F9_SCALE)
-  to override any combination.
+  hw_scale / f9_scale / id_scale default to 1.0/0.0/0.0 (hw), 0.0/1.0/0.0 (f9),
+  or 0.0/0.0/1.0 (id) for backward compatibility. Pass --hw-scale / --f9-scale /
+  --id-scale (or SIM_HW_SCALE / SIM_F9_SCALE / SIM_ID_SCALE) to override.
 
 F9 model (You & Kuhn 2022 / Schindler et al. 2005):
   F9(value, t) = Σ_{l} v[l]·C[t,l] + C[t,-1]
@@ -140,11 +142,12 @@ class KeccakTraceSimulator:
         hd_add_scale=0.0,
         hw_scale=None,
         f9_scale=None,
+        id_scale=None,
         rng_seed=None,
         f9_table=None,
     ):
-        if mode not in ("hw", "f9", "mixed"):
-            raise ValueError("mode must be 'hw', 'f9', or 'mixed' (got '{}')".format(mode))
+        if mode not in ("hw", "f9", "mixed", "id"):
+            raise ValueError("mode must be 'hw', 'f9', 'mixed', or 'id' (got '{}')".format(mode))
         if granularity not in ("word", "byte"):
             raise ValueError("granularity must be 'word' or 'byte' (got '{}')".format(granularity))
         self.mode = mode
@@ -155,12 +158,19 @@ class KeccakTraceSimulator:
         if mode == "f9":
             self.hw_scale = 0.0 if hw_scale is None else float(hw_scale)
             self.f9_scale = 1.0 if f9_scale is None else float(f9_scale)
+            self.id_scale = 0.0 if id_scale is None else float(id_scale)
         elif mode == "mixed":
             self.hw_scale = 1.0 if hw_scale is None else float(hw_scale)
             self.f9_scale = 1.0 if f9_scale is None else float(f9_scale)
+            self.id_scale = 0.0 if id_scale is None else float(id_scale)
+        elif mode == "id":
+            self.hw_scale = 0.0 if hw_scale is None else float(hw_scale)
+            self.f9_scale = 0.0 if f9_scale is None else float(f9_scale)
+            self.id_scale = 1.0 if id_scale is None else float(id_scale)
         else:  # hw
             self.hw_scale = 1.0 if hw_scale is None else float(hw_scale)
             self.f9_scale = 0.0 if f9_scale is None else float(f9_scale)
+            self.id_scale = 0.0 if id_scale is None else float(id_scale)
         self.f9_table = f9_table  # ndarray (T, 9) or (T, 33), or None
         self.rng = np.random.default_rng(rng_seed)
         self.trace = []
@@ -247,6 +257,8 @@ class KeccakTraceSimulator:
                         )
                     row = self.f9_table[self.invocation_sample_index % len(self.f9_table)]
                     sig += self.f9_scale * (float(_BITS256[b] @ row[:8]) + row[8])
+                if self.id_scale:
+                    sig += self.id_scale * b
                 hd = self.hd_add_scale * bin(b ^ self._hd_prev_bytes[i]).count("1") if self.hd_add_scale else 0.0
                 self._emit(sig + hd)
             self._hd_prev_bytes = cur
@@ -263,6 +275,8 @@ class KeccakTraceSimulator:
                 row = self.f9_table[self.invocation_sample_index % len(self.f9_table)]
                 bits = np.array([(value >> l) & 1 for l in range(32)], dtype=np.float64)
                 sig += self.f9_scale * (float(np.dot(bits, row[:32])) + row[32])
+            if self.id_scale:
+                sig += self.id_scale * value
             hd = self.hd_add_scale * bin(value ^ self._hd_prev_word).count("1") if self.hd_add_scale else 0.0
             self._emit(sig + hd)
             self._hd_prev_word = value
@@ -897,10 +911,10 @@ def _build_cli_parser():
     p.add_argument("--trace-separator", default="\n")
     p.add_argument("--append-trace", action="store_true")
     # Leakage model
-    p.add_argument("--mode", choices=["hw","f9","mixed"], default="hw",
-                   help="Leakage model: hw, f9, or mixed (default: hw). "
-                        "In mixed mode all three components are active; use "
-                        "--hw-scale/--f9-scale/--hd-add-scale to weight them.")
+    p.add_argument("--mode", choices=["hw","f9","mixed","id"], default="hw",
+                   help="Leakage model: hw, f9, mixed, or id (default: hw). "
+                        "In mixed mode hw+f9 components are active; use "
+                        "--hw-scale/--f9-scale/--id-scale/--hd-add-scale to weight them.")
     p.add_argument("--granularity", choices=["word","byte"], default="byte",
                    help="Emission granularity: word (1 sample/leak) or byte (4 samples/leak, default)")
     p.add_argument("--noise-sigma", type=float, default=0.0,
@@ -909,8 +923,10 @@ def _build_cli_parser():
                    help="HW component scale (default: 1.0 for hw/mixed, 0.0 for f9)")
     p.add_argument("--f9-scale", type=float, default=None,
                    help="F9 component scale (default: 1.0 for f9/mixed, 0.0 for hw)")
+    p.add_argument("--id-scale", type=float, default=None,
+                   help="Identity component scale (default: 1.0 for id mode, 0.0 otherwise)")
     p.add_argument("--hd-add-scale", type=float, default=0.0,
-                   help="HD component scale added on top of hw+f9 (default: 0 = disabled)")
+                   help="HD component scale added on top of hw+f9+id (default: 0 = disabled)")
     # F9 table
     p.add_argument("--f9-table",
                    help="Path to F9 coefficient table .npy. If missing, generate+save it.")
@@ -1039,6 +1055,7 @@ def main():
         hd_add_scale=args.hd_add_scale,
         hw_scale=args.hw_scale,
         f9_scale=args.f9_scale,
+        id_scale=args.id_scale,
         rng_seed=args.bulk_seed,
         f9_table=f9_table,
     )

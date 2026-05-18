@@ -1,203 +1,228 @@
-# To unset all of them run (on fish): set -n | string match -r '^SHA3_'
+# .example_env — template for pipeline runs using KeccakSim_v2.
+#
+# Copy this file to .env (or an envs/ profile) and adjust the values.
+# Run with:
+#   ./pipeline_runner/run_full_pipeline.sh --env-file ./pipeline_runner/envs/<profile>.env
+#
+# All SHA3_* variables can also be set directly in the shell; env-file values
+# override shell exports only when the pipeline script sources the file.
+# To unset all SHA3_ vars in fish: set -e (set -n | string match -r '^SHA3_')
 
-# This file contains environment variable definitions for the SHA3-32bit project.
-# SHA3_INPUTS is the number of inputs stored in one dataset folder.
-# In training, this also controls how many traces are expected per folder before multiplying by invocations.
+
+# ===========================================================================
+# General
+# ===========================================================================
+
+# Number of input messages stored in one dataset folder.
 SHA3_INPUTS=16
 
-# SHA3_INVOCATIONS is the number of trace files per input message (one file per Keccak invocation).
-# Increasing this value increases traces per folder and affects several downstream sizes.
+# Number of Keccak-f[1600] invocations per input message (= trace files per input).
 SHA3_INVOCATIONS=10
 
-# --- 0001_reference ---
-# SHA3_REFERENCE_FOLDERS is the number of folders used when building the reference trace.
-# Keep this equal to the number of available reference acquisitions.
+
+# ===========================================================================
+# 0001 — Reference
+# ===========================================================================
+
+# Number of folders used to build the reference trace.
 SHA3_REFERENCE_FOLDERS=2
 
-# SHA3_REFERENCE_TRACE_LEN is the raw sample length expected in reference traces.
-# Set this to the exact sample count in your reference capture files.
+# Raw sample count in each reference trace file.
 SHA3_REFERENCE_TRACE_LEN=13824
 
-# --- 0002_detection ---
-# SHA3_DETECTION_TRACE_LEN is the raw sample length expected for detection traces.
-# It must match the actual file length used in the detection phase.
+
+# ===========================================================================
+# 0002 — Detection
+# ===========================================================================
+
+# Raw sample count expected in detection trace files.
 SHA3_DETECTION_TRACE_LEN=13824
 
-# SHA3_DETECTION_SET_COUNT is the number of detection folders/sets to process.
-# Set this to the count of detection datasets you actually have.
+# Number of detection folders/sets to process.
 SHA3_DETECTION_SET_COUNT=5
 
-# SHA3_DETECTION_SETS_PER_PART is a packaging parameter for detection part_XX.hdf5 files.
-# It controls how many detection sets are grouped per part and only affects chunking/I-O, not signal content.
+# How many detection sets are grouped into one part_XX.hdf5 (I/O packaging only).
 SHA3_DETECTION_SETS_PER_PART=10
 
-# SHA3_DETECTION_CORR_BOUND is the minimum allowed correlation between a detection trace and the reference trace.
-# Lower this if valid simulated traces are rejected; keep it high only for very tightly aligned traces.
+# Minimum Pearson correlation with the reference trace; traces below this are rejected.
 SHA3_DETECTION_CORR_BOUND=0.82
 
-# SHA3_DETECTION_TRACE_OFFSET is the first raw sample index considered during detection preprocessing.
-# Increase this to skip early trace regions before the useful leakage window starts.
+# First raw sample index considered during detection preprocessing.
 SHA3_DETECTION_TRACE_OFFSET=0
 
-# SHA3_DETECTION_PPC is the step in raw samples between consecutive extracted points.
-# Larger values sample more sparsely across time, while smaller values keep denser temporal sampling.
+# Step between consecutive extracted points (larger = sparser temporal sampling).
 SHA3_DETECTION_PPC=10
 
-# SHA3_DETECTION_OUTPUT_SIZE is the number of extracted points per processed detection trace.
-# This directly becomes the trace length stored in processed detection HDF5 files.
+# Number of extracted points per processed detection trace.
 SHA3_DETECTION_OUTPUT_SIZE=1382
 
-# SHA3_DETECTION_ROUNDS is the number of Keccak rounds considered in detection extraction/reporting.
+# Number of Keccak rounds considered in detection extraction/reporting.
 SHA3_DETECTION_ROUNDS=4
 
-# SHA3_DETECTION_ICS_WORDS_AB is the number of 32-bit words scanned for A/B tags per round.
+# Words scanned for A/B and C/D tags per round during ICS extraction.
 SHA3_DETECTION_ICS_WORDS_AB=50
-
-# SHA3_DETECTION_ICS_WORDS_CD is the number of 32-bit words scanned for C/D tags per round.
 SHA3_DETECTION_ICS_WORDS_CD=10
 
-# SHA3_DETECTION_ICS_THRESHOLDS is the comma-separated threshold list used by Code_extract_ics.
+# Comma-separated R² threshold list for ICS extraction; one archive per threshold.
 SHA3_DETECTION_ICS_THRESHOLDS=0.09,0.08,0.07,0.06,0.05,0.04,0.03,0.02,0.01
 
-# SHA3_DETECTION_SAMPLE_SHIFT is an additional per-point offset applied before averaging each window.
-# Use it to fine-align extraction windows to your trace timing without changing the global offset.
+# Additional per-point offset applied before averaging each extraction window.
 SHA3_DETECTION_SAMPLE_SHIFT=0
 
-# SHA3_DETECTION_SAMPLE_WIDTH is the number of raw samples averaged for each extracted point.
-# Larger widths smooth more noise but reduce local temporal detail.
+# Number of raw samples averaged per extracted point (1 = no averaging).
 SHA3_DETECTION_SAMPLE_WIDTH=1
 
-# --- 0003_training ---
-# SHA3_TRAINING_SET_COUNT is the number of training folders (Raw_TR_xxxx) to process.
-# This controls overall training volume and the total number of traces downstream.
+
+# ===========================================================================
+# 0003 — Training
+# ===========================================================================
+
+# Number of training folders (Raw_TR_xxxx) to process.
 SHA3_TRAINING_SET_COUNT=10
 
-# SHA3_TRAINING_TRACE_LEN is the raw sample length expected in each training trace file.
-# Keep this aligned with the acquisition setup so bounds checks and derived windows are valid.
+# Raw sample count expected in each training trace file.
 SHA3_TRAINING_TRACE_LEN=13824
 
-# SHA3_TRAINING_TRACE_OFFSET is the first raw sample index used for feature extraction.
-# Use this to skip unstable or uninformative prefix samples before the target activity starts.
+# First raw sample index used for feature extraction.
 SHA3_TRAINING_TRACE_OFFSET=0
 
-# SHA3_TRAINING_PPC is the number of raw points aggregated into one compressed output point.
-# Larger values smooth more and reduce temporal resolution; smaller values keep finer timing detail.
+# Raw samples aggregated into one compressed output point.
 SHA3_TRAINING_PPC=1
 
-# SHA3_TRAINING_OUTPUT_SIZE is the number of compressed points kept per processed trace.
-# Together with offset and PPC, it defines the raw window: offset + output_size * ppc.
+# Compressed points kept per processed trace (window = offset + output_size * ppc).
 SHA3_TRAINING_OUTPUT_SIZE=13824
 
-# SHA3_TRAINING_SETS_PER_PART is only a packaging/chunking parameter for part_XX.hdf5 files.
-# It does not change signal content; it only controls how many training folders are grouped into each part file for storage and I/O convenience.
+# How many training folders are grouped into one part_XX.hdf5 (I/O packaging only).
 SHA3_TRAINING_SETS_PER_PART=10
 
-# SHA3_TRAINING_CORR_BOUND is the minimum Pearson correlation allowed between each raw trace and the reference trace.
-# Lower this if valid traces are rejected by quality filtering; increase it only if your traces are very tightly aligned.
+# Minimum Pearson correlation with the reference trace for training traces.
 SHA3_TRAINING_CORR_BOUND=0.82
 
-# SHA3_TRAINING_ICS_LEVEL selects which extracted ICS archive is used by training IoP extraction.
-# Example: 10 -> ics_original_010.zip, 20 -> ics_original_020.zip.
+# Selects which ICS archive flows into training IoP extraction.
+# Integer N → ics_original_0N0.zip  (e.g. 70 → ics_original_070.zip).
 SHA3_TRAINING_ICS_LEVEL=70
 
-# --- 0004_validation ---
-# SHA3_VALIDATION_INPUTS is the number of inputs expected per validation folder.
-# Set this to the exact count present in your validation datasets.
+
+# ===========================================================================
+# 0004 — Validation
+# ===========================================================================
+
+# Number of input messages expected per validation folder.
 SHA3_VALIDATION_INPUTS=10
 
-# SHA3_VALIDATION_SET_COUNT is the number of validation folders/sets to process.
-# Set this to match your available validation data volume.
+# Number of validation folders/sets to process.
 SHA3_VALIDATION_SET_COUNT=5
 
-# SHA3_VALIDATION_TRACE_OFFSET is the first raw sample index used in validation preprocessing.
-# Keep this aligned with where useful activity begins in your validation traces.
+# First raw sample index used in validation preprocessing.
 SHA3_VALIDATION_TRACE_OFFSET=0
 
-# SHA3_VALIDATION_PPC is the number of raw samples aggregated per validation output point.
-# Together with output size, this controls temporal resolution in validation traces.
+# Raw samples aggregated per validation output point.
 SHA3_VALIDATION_PPC=1
 
-# SHA3_VALIDATION_OUTPUT_SIZE is the number of processed points kept per validation trace.
-# Keep this consistent with the template extraction geometry used downstream.
+# Processed points kept per validation trace.
 SHA3_VALIDATION_OUTPUT_SIZE=13824
 
-# SHA3_VALIDATION_CORR_BOUND is the minimum allowed correlation in validation preprocessing.
-# For the current simulated validation traces, values around 0.90 are realistic.
+# Minimum Pearson correlation with the reference trace for validation traces.
 SHA3_VALIDATION_CORR_BOUND=0.90
 
-# SHA3_VALIDATION_SETS_PER_PART controls how many validation sets are grouped into one part_XX.hdf5.
-# Use smaller values for quicker iteration; larger values reduce part count.
+# How many validation sets are grouped into one part_XX.hdf5.
 SHA3_VALIDATION_SETS_PER_PART=10
 
-# SHA3_VALIDATION_TEMPLATE_TAG selects ICS/template archives in 0004 template validation.
-# Example: 10 -> ics_original_010.zip and templateLDA_O010.zip.
+# Selects the template archive used in validation (integer N → templateLDA_O0N0.zip).
 SHA3_VALIDATION_TEMPLATE_TAG=10
 
-# SHA3_VALIDATION_ICS_TAG selects the ICS archive used by template validation.
-# Keep this aligned with the ICS content used during template profiling.
+# Selects the ICS archive used in validation (keep aligned with training ICS level).
 SHA3_VALIDATION_ICS_TAG=70
-# --- 0005_SASCA ---
-# SHA3_SASCA_TRACE_COUNT is how many validation traces 0005_SASCA will process.
-# Default in code is min(1000, available validation traces); set this explicitly if needed.
+
+
+# ===========================================================================
+# 0005 — SASCA (belief propagation)
+# ===========================================================================
+
+# Number of validation traces processed by SASCA.
 SHA3_SASCA_TRACE_COUNT=500
 
-# SHA3_SASCA_TEMPLATE_TAG selects template archive templateLDA_OXXX.zip used in 0005.
+# Template archive used by SASCA (integer N → templateLDA_O0N0.zip).
 SHA3_SASCA_TEMPLATE_TAG=10
 
-# SHA3_SASCA_ICS_TAG selects ICS archive ics_original_XXX.zip used in 0005.
+# ICS archive used by SASCA (keep aligned with training and validation ICS level).
 SHA3_SASCA_ICS_TAG=70
 
-# SHA3_SASCA_PPC is the samples-per-ICS-point factor used in 0005 table generation.
+# Samples-per-ICS-point factor used in SASCA table generation.
 SHA3_SASCA_PPC=10
 
-# SHA3_SASCA_ITERATION_COUNT is the number of loopy-BP iterations for iteration scans.
+# BP iterations for the iteration scan.
 SHA3_SASCA_ITERATION_COUNT=40
 
-# SHA3_SASCA_RATE_BP_ITERATION_COUNT is the max loopy-BP iterations per rate point.
+# Maximum BP iterations per point in the rate scan.
 SHA3_SASCA_RATE_BP_ITERATION_COUNT=200
 
-# SHA3_SASCA_RATE_POINT_COUNT is the number of points in the rate scan axis.
-# With step_bits=8 and point_count=201, rates span 0..1600 unknown bits.
+# Number of points on the rate scan axis.
 SHA3_SASCA_RATE_POINT_COUNT=201
 
-# SHA3_SASCA_RATE_STEP_BITS is the spacing between consecutive rate scan points.
+# Spacing between consecutive rate scan points in unknown bits.
 SHA3_SASCA_RATE_STEP_BITS=8
 
-# SHA3_SASCA_ALLOWED_WRONG_BITS controls success criterion in scans.
-# 0 means exact 1600-bit match, 1 allows one wrong bit, etc.
+# Success criterion: maximum number of wrong bits still counted as a success.
 SHA3_SASCA_ALLOWED_WRONG_BITS=0
 
-# SHA3_SASCA_OUTPUT_BITS defines the digest length used to derive known-rate bits.
-# For SHA3-512 keep this at 512.
+# Digest length in bits used to derive known-rate bits (512 for SHA3-512).
 SHA3_SASCA_OUTPUT_BITS=512
 
-# --- Simulator settings used by run_full_pipeline.sh ---
-# These variables control how KeccakSim_BI_TA.py generates raw traces for RE/DN/TR/TS.
 
-# SIM_ALGORITHM sets the hash function mode passed to the simulator.
+# ===========================================================================
+# Simulator (KeccakSim_v2)
+# ===========================================================================
+
+# Hash algorithm to simulate.
 SIM_ALGORITHM=sha3-512
 
-# SIM_TRACE_FORMAT controls output trace format written by the simulator.
+# Output format for trace files written by the simulator.
 SIM_TRACE_FORMAT=bin
 
-# SIM_TRACE_DTYPE is the numpy dtype for binary trace files.
+# numpy dtype for binary trace files.
 SIM_TRACE_DTYPE=float64
 
-# SIM_BULK_DATA_FORMAT controls format of generated data_in.npy/data_out.npy.
+# Format of generated data_in / data_out index files.
 SIM_BULK_DATA_FORMAT=hex
 
-# Noise/jitter parameters for leakage simulation.
+# Leakage model. Choose one:
+#   hw    — Hamming weight of each word/byte (default)
+#   f9    — stochastic linear model (requires SIM_F9_* settings below)
+#   mixed — hw + f9 combined (requires SIM_F9_* settings)
+#   id    — raw data value leaks directly (identity model)
+SIM_MODE=hw
+
+# Emission granularity:
+#   byte — four 8-bit samples per leak() call (default, matches real HW behaviour)
+#   word — one 32-bit sample per leak() call
+SIM_GRANULARITY=byte
+
+# Std-dev of additive Gaussian noise per sample (0.0 = noiseless).
 SIM_NOISE_SIGMA=0.01
-SIM_GAIN_JITTER_SIGMA=0.001
-SIM_OFFSET_JITTER_SIGMA=0.01
-SIM_SMOOTH_WINDOW=1
 
-# Leakage composition and profile controls.
-SIM_LEAKAGE_PROFILE=full
-SIM_COMMON_WAVE_SCOPE=invocation
-SIM_HW_RATIO=0.65
+# Scale of the Hamming-distance component added on top of the primary model.
+# 0.0 disables it (default). Set > 0 to model bus / register transition leakage.
+SIM_HD_ADD_SCALE=0.0
 
-# Seeds per dataset group for reproducible generation.
+# Per-component scale overrides. Leave commented to use the mode defaults:
+#   hw_scale  defaults to 1.0 for hw/mixed, 0.0 for f9/id
+#   f9_scale  defaults to 1.0 for f9/mixed, 0.0 for hw/id
+#   id_scale  defaults to 1.0 for id,       0.0 for hw/f9/mixed
+#SIM_HW_SCALE=1.0
+#SIM_F9_SCALE=0.0
+#SIM_ID_SCALE=0.0
+
+# F9 table settings (only used when SIM_MODE=f9, SIM_MODE=mixed, or SIM_F9_SCALE > 0).
+# The table is generated once and cached at TRACES_DIR; re-used across all groups.
+SIM_F9_SEED=2839
+SIM_F9_C8_RANGE=0.5
+# Bit-coefficient upper bound U(0, s). Two common choices:
+#   1.0    (default): E[Var_signal] = 0.667, SNR_var = 0.667/sigma^2 (crossover at sigma ≈ 0.816)
+#   1.2247 (normalized, =sqrt(3/2)): E[Var_signal] = 1.0, SNR_var = 1/sigma^2 (crossover at sigma = 1.0)
+#SIM_F9_BIT_COEFF_SCALE=1.0
+
+# RNG seeds for each dataset group (change to generate different random inputs).
 SIM_SEED_RE=128
 SIM_SEED_DN=256
 SIM_SEED_TR=512

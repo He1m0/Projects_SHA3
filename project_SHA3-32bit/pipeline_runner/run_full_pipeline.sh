@@ -112,6 +112,11 @@ if [ -z "${TRACES_DIR:-}" ] && [ "$SKIP_SIM" -eq 0 ]; then
   exit 1
 fi
 
+if [ "$SKIP_SIM" -eq 1 ] && [ -z "${TRACES_DIR:-}" ]; then
+  echo "Error: --skip-sim requires TRACES_DIR to be set (needed for zip+deploy)" >&2
+  exit 1
+fi
+
 # Apply selected environment profile for all project scripts.
 cp "${ENV_FILE}" "${PROJECT_DIR}/.env"
 
@@ -251,6 +256,20 @@ move_zips_to_raw() {
   fi
 }
 
+deploy_group() {
+  GROUP="$1"
+  DEST="$2"
+  BASE_DIR="${TRACES_DIR}/Raw_${GROUP}"
+  if [ ! -d "${BASE_DIR}" ]; then
+    echo "Error: --skip-sim: traces not found for ${GROUP} in ${TRACES_DIR}" >&2
+    exit 1
+  fi
+  log "ZIP  : ${GROUP} (from TRACES_DIR)"
+  zip_sim_dirs "${BASE_DIR}" "Raw_${GROUP}"
+  log "MOVE : ${GROUP} -> ${DEST}"
+  move_zips_to_raw "${BASE_DIR}" "Raw_${GROUP}" "${DEST}"
+}
+
 simulate_group() {
   GROUP="$1"
   FOLDERS="$2"
@@ -315,6 +334,7 @@ simulate_group() {
     SCALE_FLAGS=""
     [ -n "${SIM_HW_SCALE:-}" ] && SCALE_FLAGS="${SCALE_FLAGS} --hw-scale ${SIM_HW_SCALE}"
     [ -n "${SIM_F9_SCALE:-}" ] && SCALE_FLAGS="${SCALE_FLAGS} --f9-scale ${SIM_F9_SCALE}"
+    [ -n "${SIM_ID_SCALE:-}" ] && SCALE_FLAGS="${SCALE_FLAGS} --id-scale ${SIM_ID_SCALE}"
     python3 "${SIM_SCRIPT}" \
       --algorithm "${SIM_ALGORITHM:-sha3-512}" \
       --trace \
@@ -403,6 +423,12 @@ if [ "$SKIP_SIM" -eq 0 ]; then
   simulate_group "DN" "${SHA3_DETECTION_SET_COUNT}" "${SHA3_INPUTS}" "${SIM_SEED_DN:-256}"
   simulate_group "TR" "${SHA3_TRAINING_SET_COUNT}" "${SHA3_INPUTS}" "${SIM_SEED_TR:-512}"
   simulate_group "TS" "${SHA3_VALIDATION_SET_COUNT}" "${SHA3_VALIDATION_INPUTS}" "${SIM_SEED_TS:-1024}"
+else
+  log "INFO : --skip-sim: zipping and deploying existing traces from TRACES_DIR=${TRACES_DIR}"
+  deploy_group "RE" "${PROJECT_DIR}/0001_reference/Raw"
+  deploy_group "DN" "${PROJECT_DIR}/0002_detection/Raw"
+  deploy_group "TR" "${PROJECT_DIR}/0003_training/Raw"
+  deploy_group "TS" "${PROJECT_DIR}/0004_validation/Raw"
 fi
 
 if [ "$SKIP_CHAIN" -eq 0 ]; then
