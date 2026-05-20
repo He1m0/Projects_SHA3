@@ -28,13 +28,15 @@ Sigmas: 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0
 
 ### Batch 2+3 — hw + id simultaneously (--skip-sim)
 
-Launch both immediately when hd clears training (~2026-05-21 13:00). Safe to overlap:
-no simulation contention, 192 cores handles 18 concurrent R2 runs (~1.4× slowdown vs 9).
+**Revised trigger (2026-05-20):** launch when hd clears R2 (~2026-05-21 07:00), not when hd
+clears training. Saves ~6h wait. hw and id both enter R2 ~2h after launch (18-way, ~1.27×
+slowdown); f9-4a+4b join ~6h and ~11h later respectively — peak 24-way R2 concurrency.
+ETA all complete: ~2026-05-26 (was ~2026-05-31; saves ~5 days).
 
 | Run | Sandbox | Started | Status | Finished | Archive |
 |-----|---------|---------|--------|----------|---------|
-| hw σ=0.1–4.0 (×9) | paperscale_v2_hw_sigma* | — | PENDING (~2026-05-25 06:00) | — | — |
-| id σ=0.1–4.0 (×9) | paperscale_v2_id_sigma* | — | PENDING (~2026-05-25 06:00) | — | — |
+| hw σ=0.1–4.0 (×9) | paperscale_v2_hw_sigma* | — | PENDING (~2026-05-21 07:00) | — | — |
+| id σ=0.1–4.0 (×9) | paperscale_v2_id_sigma* | — | PENDING (~2026-05-21 07:00) | — | — |
 
 ### Batch 4c — f9 high noise (simulate; launched with Batch 1)
 
@@ -46,15 +48,21 @@ no simulation contention, 192 cores handles 18 concurrent R2 runs (~1.4× slowdo
 
 ### Batch 4a — f9 low noise (simulate; σ=0.1, 0.5, 1.0)
 
+**Revised trigger:** launch simultaneously with hw+id (simulation runs alongside hw+id deploy,
+uses different resources). Enters R2 ~6h after hw+id. ETA: ~2026-05-26.
+
 | Run | Sandbox | Started | Status | Finished | Archive |
 |-----|---------|---------|--------|----------|---------|
-| f9 σ=0.1–1.0 (×3) | paperscale_v2_f9_sigma{0p1,0p5,1p0} | — | PENDING (~2026-05-28 08:00) | — | — |
+| f9 σ=0.1–1.0 (×3) | paperscale_v2_f9_sigma{0p1,0p5,1p0} | — | PENDING (~2026-05-21 07:00) | — | — |
 
 ### Batch 4b — f9 mid noise (simulate; σ=1.5, 2.0, 2.5)
 
+**Revised trigger:** launch when 4a shows `[MOVE : DN]` (~5h after 4a start). Enters R2
+~11h after hw+id. ETA: ~2026-05-26.
+
 | Run | Sandbox | Started | Status | Finished | Archive |
 |-----|---------|---------|--------|----------|---------|
-| f9 σ=1.5–2.5 (×3) | paperscale_v2_f9_sigma{1p5,2p0,2p5} | — | PENDING (~2026-05-31 10:00) | — | — |
+| f9 σ=1.5–2.5 (×3) | paperscale_v2_f9_sigma{1p5,2p0,2p5} | — | PENDING (~2026-05-21 12:00) | — | — |
 
 ---
 
@@ -93,6 +101,7 @@ ssh IDP "for log in /storage/ge96pug/Projects_SHA3_sandbox_paperscale_v2_*/proje
 # Just the last marker line per run (phase transitions)
 ssh IDP "tail -1 /storage/ge96pug/Projects_SHA3_sandbox_paperscale_v2_*/project_SHA3-32bit/pipeline_runner/sandbox_*.log 2>/dev/null"
 
-# Check if any hd runs have cleared training (look for VALIDATION marker)
-ssh IDP "grep -l VALIDATION /storage/ge96pug/Projects_SHA3_sandbox_paperscale_v2_hd_sigma*/project_SHA3-32bit/pipeline_runner/sandbox_*.log 2>/dev/null || echo 'none yet'"
+# Check if all 9 hd runs have cleared R2 (trigger for hw+id+f9 launch)
+ssh IDP "grep -c 'DONE.*0002 detection R2' /storage/ge96pug/Projects_SHA3_sandbox_paperscale_v2_hd_sigma*/project_SHA3-32bit/pipeline_runner/sandbox_*.log 2>/dev/null"
+# → need 9 lines of ':1'
 ```
