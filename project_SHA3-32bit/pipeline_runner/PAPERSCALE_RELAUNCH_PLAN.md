@@ -1,5 +1,11 @@
 # Paperscale Sigma Sweep — Relaunch Plan (revised 2026-05-20)
 
+> **FROZEN 2026-05-22.** Second OOM crash killed all 36 runs on 2026-05-21 (28 concurrent
+> R2 processes, commit 118%). Active experiment switched to **Midscale v1 sigma sweep**
+> (30 det sets, 200 TR sets) — see `RUN_LOG.md` and `envs/midscale_v1_sigma_sweep/`.
+> Paperscale sandboxes and trace dirs preserved on IDP. Resume paperscale after midscale
+> results are in hand. Correct safe R2 concurrent limit: **≤18** (not ≤24 as written below).
+
 ## Context
 
 36 paperscale runs across 4 leakage modes (hd, hw, id, f9) × 9 sigma values (0.1–4.0).

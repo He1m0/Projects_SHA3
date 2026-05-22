@@ -1,6 +1,6 @@
 # Pipeline Run Log
 
-Tracks paperscale sigma sweep runs and notable smoke runs.
+Tracks sigma sweep runs and notable smoke runs.
 Update this file whenever a batch launches, finishes, or gets archived.
 
 Log markers: `[MOVE : DN]` = detection done, `[MOVE : TR]` = training started,
@@ -8,61 +8,90 @@ Log markers: `[MOVE : DN]` = detection done, `[MOVE : TR]` = training started,
 
 ---
 
-## Paperscale Sigma Sweep (36 runs — 4 modes × 9 sigmas)
+## Midscale v1 Sigma Sweep — ACTIVE (36 runs — 4 modes × 9 sigmas)
+
+Scale: 30 det sets, 200 TR sets, 20 val sets, 300 SASCA traces.
+Env dir: `envs/midscale_v1_sigma_sweep/sigma{X}/` (per-sigma-slice, 4 modes per slice).
+Sandbox naming: `midscale_v1_{mode}_sigma{X}`.
+
+Trace reuse:
+- hd/hw/id all sigmas: `--skip-sim`, TRACES_DIR=`/storage/ge96pug/traces_paperscale_v2_{mode}_sigma{X}`
+- f9 σ=3.0/3.5/4.0: `--skip-sim`, TRACES_DIR=`/storage/ge96pug/traces_paperscale_v2_f9_sigma{X}` (TR=400 ✓)
+- f9 σ=0.1/0.5/1.0: simulate (TR killed at 4–6 sets in crash), TRACES_DIR=`/storage/ge96pug/traces_midscale_v1_f9_sigma{X}`
+- f9 σ=1.5/2.0/2.5: simulate (no traces exist), TRACES_DIR=`/storage/ge96pug/traces_midscale_v1_f9_sigma{X}`
+
+Concurrency: safe cap ≤24 concurrent R2 (midscale ~10 GB commit/process vs paperscale ~33 GB).
+Before each wave: `ssh IDP "pgrep -c -f detect_script"` must be ≤ 20.
+
+Wave A — hd/hw/id × 6 slices (σ=0.1–2.5) simultaneously; f9 σ=3.0/3.5/4.0 also --skip-sim.
+Wave A-f9 — f9 simulations: 3 concurrent max (disk-write cap); σ=0.1/0.5/1.0 first, then σ=1.5/2.0/2.5.
+Wave B — hd/hw/id × 3 slices (σ=3.0–4.0) when R2 count drops; f9 σ=0.1–2.5 after simulation done.
+
+Est. completion: ~12–14h after launch (hd/hw/id slices done ~8–10h).
+
+| Run | Sandbox | Started | Status | Finished | Archive |
+|-----|---------|---------|--------|----------|---------|
+| hd σ=0.1–4.0 (×9) | midscale_v1_hd_sigma* | — | PENDING | — | — |
+| hw σ=0.1–4.0 (×9) | midscale_v1_hw_sigma* | — | PENDING | — | — |
+| id σ=0.1–4.0 (×9) | midscale_v1_id_sigma* | — | PENDING | — | — |
+| f9 σ=0.1–4.0 (×9) | midscale_v1_f9_sigma* | — | PENDING | — | — |
+
+---
+
+## Paperscale Sigma Sweep — FROZEN (OOM crash 2026-05-21) (36 runs — 4 modes × 9 sigmas)
 
 Sigmas: 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0
 
-### Batch 1 — hd (--skip-sim)
+**All processes killed by OOM at 2026-05-21 10:41–10:51.** Root cause: 28 concurrent R2
+processes committed ~33 GB virtual each, exceeding ~940 GB overcommit limit. Nothing is
+running. Frozen state preserved on IDP. To resume paperscale, see PAPERSCALE_RELAUNCH_PLAN.md.
 
-| Run | Sandbox | Started | Status | Finished | Archive |
-|-----|---------|---------|--------|----------|---------|
-| hd σ=0.1 | paperscale_v2_hd_sigma0p1 | 2026-05-18 19:27 | RUNNING (training) | — | — |
-| hd σ=0.5 | paperscale_v2_hd_sigma0p5 | 2026-05-18 19:27 | RUNNING (training) | — | — |
-| hd σ=1.0 | paperscale_v2_hd_sigma1p0 | 2026-05-18 19:27 | RUNNING (training) | — | — |
-| hd σ=1.5 | paperscale_v2_hd_sigma1p5 | 2026-05-18 19:27 | RUNNING (training) | — | — |
-| hd σ=2.0 | paperscale_v2_hd_sigma2p0 | 2026-05-18 19:27 | RUNNING (training) | — | — |
-| hd σ=2.5 | paperscale_v2_hd_sigma2p5 | 2026-05-18 19:27 | RUNNING (training) | — | — |
-| hd σ=3.0 | paperscale_v2_hd_sigma3p0 | 2026-05-18 19:27 | RUNNING (training) | — | — |
-| hd σ=3.5 | paperscale_v2_hd_sigma3p5 | 2026-05-18 19:28 | RUNNING (training) | — | — |
-| hd σ=4.0 | paperscale_v2_hd_sigma4p0 | 2026-05-18 19:28 | RUNNING (training) | — | — |
+### Batch 1 — hd (frozen state at OOM crash)
 
-### Batch 2+3 — hw + id simultaneously (--skip-sim)
+| Run | Sandbox | Started | Frozen Status |
+|-----|---------|---------|--------------|
+| hd σ=0.1 | paperscale_v2_hd_sigma0p1 | 2026-05-18 19:27 | **Partial R2** (detect_results_08 partially filled) |
+| hd σ=0.5 | paperscale_v2_hd_sigma0p5 | 2026-05-18 19:27 | **Partial R2** |
+| hd σ=1.0 | paperscale_v2_hd_sigma1p0 | 2026-05-18 19:27 | **Partial R2** |
+| hd σ=1.5 | paperscale_v2_hd_sigma1p5 | 2026-05-18 19:27 | **Partial R2** |
+| hd σ=2.0 | paperscale_v2_hd_sigma2p0 | 2026-05-18 19:27 | **Partial R2** |
+| hd σ=2.5 | paperscale_v2_hd_sigma2p5 | 2026-05-18 19:27 | R2 DONE; **partial training** (IoP parts 00–02 done) |
+| hd σ=3.0 | paperscale_v2_hd_sigma3p0 | 2026-05-18 19:27 | **Partial R2** |
+| hd σ=3.5 | paperscale_v2_hd_sigma3p5 | 2026-05-18 19:28 | R2 DONE; **partial training** (IoP part 00 done) |
+| hd σ=4.0 | paperscale_v2_hd_sigma4p0 | 2026-05-18 19:28 | **Partial R2** |
 
-**Revised trigger (2026-05-20):** launch when hd clears R2 (~2026-05-21 07:00), not when hd
-clears training. Saves ~6h wait. hw and id both enter R2 ~2h after launch (18-way, ~1.27×
-slowdown); f9-4a+4b join ~6h and ~11h later respectively — peak 24-way R2 concurrency.
-ETA all complete: ~2026-05-26 (was ~2026-05-31; saves ~5 days).
+### Batch 2+3 — hw + id (frozen state at OOM crash)
 
-| Run | Sandbox | Started | Status | Finished | Archive |
-|-----|---------|---------|--------|----------|---------|
-| hw σ=0.1–4.0 (×9) | paperscale_v2_hw_sigma* | — | PENDING (~2026-05-21 07:00) | — | — |
-| id σ=0.1–4.0 (×9) | paperscale_v2_id_sigma* | — | PENDING (~2026-05-21 07:00) | — | — |
+Launched 2026-05-21 09:13 — OOM hit ~90 min later. Zero R2 progress for both modes.
 
-### Batch 4c — f9 high noise (simulate; launched with Batch 1)
+| Run | Sandbox | Frozen Status |
+|-----|---------|--------------|
+| hw σ=0.1–4.0 (×9) | paperscale_v2_hw_sigma* | **0 R2 progress** (preprocessing/deploy only) |
+| id σ=0.1–4.0 (×9) | paperscale_v2_id_sigma* | **0 R2 progress** (preprocessing/deploy only) |
 
-| Run | Sandbox | Started | Status | Finished | Archive |
-|-----|---------|---------|--------|----------|---------|
-| f9 σ=3.0 | paperscale_v2_f9_sigma3p0 | 2026-05-18 19:48 | RUNNING (training) | — | — |
-| f9 σ=3.5 | paperscale_v2_f9_sigma3p5 | 2026-05-18 19:48 | RUNNING (training) | — | — |
-| f9 σ=4.0 | paperscale_v2_f9_sigma4p0 | 2026-05-18 19:48 | RUNNING (training) | — | — |
+### Batch 4c — f9 high noise (frozen state at OOM crash)
 
-### Batch 4a — f9 low noise (simulate; σ=0.1, 0.5, 1.0)
+| Run | Sandbox | Started | Frozen Status |
+|-----|---------|---------|--------------|
+| f9 σ=3.0 | paperscale_v2_f9_sigma3p0 | 2026-05-18 19:48 | **Partial R2** |
+| f9 σ=3.5 | paperscale_v2_f9_sigma3p5 | 2026-05-18 19:48 | **Partial R2** |
+| f9 σ=4.0 | paperscale_v2_f9_sigma4p0 | 2026-05-18 19:48 | **Partial R2** |
 
-**Revised trigger:** launch simultaneously with hw+id (simulation runs alongside hw+id deploy,
-uses different resources). Enters R2 ~6h after hw+id. ETA: ~2026-05-26.
+Trace dirs complete (DN=100, TR=400, TS=40 each) — resumable with smart R2 resume.
 
-| Run | Sandbox | Started | Status | Finished | Archive |
-|-----|---------|---------|--------|----------|---------|
-| f9 σ=0.1–1.0 (×3) | paperscale_v2_f9_sigma{0p1,0p5,1p0} | — | PENDING (~2026-05-21 07:00) | — | — |
+### Batch 4a — f9 low noise (frozen state at OOM crash)
 
-### Batch 4b — f9 mid noise (simulate; σ=1.5, 2.0, 2.5)
+| Run | Sandbox | Started | Frozen Status |
+|-----|---------|---------|--------------|
+| f9 σ=0.1 | paperscale_v2_f9_sigma0p1 | 2026-05-21 09:13 | **TR simulation killed** (DN=100, TR=6, TS=0) |
+| f9 σ=0.5 | paperscale_v2_f9_sigma0p5 | 2026-05-21 09:13 | **TR simulation killed** (DN=100, TR=4, TS=0) |
+| f9 σ=1.0 | paperscale_v2_f9_sigma1p0 | 2026-05-21 09:13 | **TR simulation killed** (DN=100, TR=5, TS=0) |
 
-**Revised trigger:** launch when 4a shows `[MOVE : DN]` (~5h after 4a start). Enters R2
-~11h after hw+id. ETA: ~2026-05-26.
+### Batch 4b — f9 mid noise (never launched)
 
-| Run | Sandbox | Started | Status | Finished | Archive |
-|-----|---------|---------|--------|----------|---------|
-| f9 σ=1.5–2.5 (×3) | paperscale_v2_f9_sigma{1p5,2p0,2p5} | — | PENDING (~2026-05-21 12:00) | — | — |
+| Run | Frozen Status |
+|-----|--------------|
+| f9 σ=1.5/2.0/2.5 | **Never launched** — no sandboxes, no traces |
 
 ---
 
