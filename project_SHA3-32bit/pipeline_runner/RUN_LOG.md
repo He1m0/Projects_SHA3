@@ -27,34 +27,34 @@ Wave A — hd/hw/id × 6 slices (σ=0.1–2.5) simultaneously; f9 σ=3.0/3.5/4.0
 Wave A-f9 — f9 simulations: 3 concurrent max (disk-write cap); σ=0.1/0.5/1.0 first, then σ=1.5/2.0/2.5.
 Wave B — hd/hw/id × 3 slices (σ=3.0–4.0) when R2 count drops; f9 σ=0.1–2.5 after simulation done.
 
-Est. completion: ~12–14h after launch (hd/hw/id slices done ~8–10h).
+Actual R2 duration: ~22–24h (far longer than 2–4h estimate; likely BLAS contention at 20–25 concurrent).
 
 Wave A launched 2026-05-22 ~10:57–11:05 (21 runs: hd/hw/id σ=0.1–2.5 + f9 σ=3.0–4.0, --skip-sim).
 Wave Af9 batch 1 launched 2026-05-22 ~11:05 (f9 σ=0.1/0.5/1.0, simulate). [MOVE:DN] at ~11:39.
-Wave Af9 batch 2 launched 2026-05-22 ~15:00 (f9 σ=1.5/2.0/2.5, simulate). [MOVE:DN] expected ~19:00.
-Wave B PENDING — launch `sh launch_midscale_v1.sh B` when `pgrep -c -f detect_script` ≤ 20.
+Wave Af9 batch 2 launched 2026-05-22 ~15:00 (f9 σ=1.5/2.0/2.5, simulate).
+Wave B launched 2026-05-23 ~11:52 (hd/hw/id σ=3.0–4.0, --skip-sim). R2 count was 20 at launch.
 
-**Status as of 2026-05-22 18:45:**
-- 25 concurrent R2 processes. All 27 launched runs are active.
-- R2 is taking longer than the 2–4h estimate (~6.5h so far for Wave A runs). Still progressing.
-- Wave B not yet launched — R2 count must drop to ≤20 first.
-- Wave B launch command (from local pipeline_runner/):
-  ```sh
-  ssh IDP "pgrep -c -f detect_script"   # must be ≤ 20 before running
-  sh launch_midscale_v1.sh B
-  ```
+**ICS level fix — f9 σ=3.0/3.5/4.0:**
+High-noise f9 runs found no ICS at threshold 90 (ics_original_090.zip empty). Fixed in-place:
+- Updated sandbox `.env` + local env files: SHA3_TRAINING_ICS_LEVEL=50, VALIDATION/SASCA tags=50.
+- σ=3.0 and σ=4.0: pipeline died at ICS check → cleaned 0003 → restarted via `run_overnight_chain.sh --with-training`.
+- σ=3.5: `.env` updated while in R2; pipeline died anyway (old env vars in shell) → same restart applied.
+- ics_original_050.zip had 131–141 KB of content for all three runs.
+- Env files committed: `envs/midscale_v1_sigma_sweep/sigma{3p0,3p5,4p0}/.env_midscale_v1_f9_sigma*`
 
-| Run | Sandbox | Started | Status (2026-05-22 18:45) | Finished | Archive |
-|-----|---------|---------|--------------------------|----------|---------|
-| hd σ=0.1–2.5 (×6) | midscale_v1_hd_sigma* | 2026-05-22 10:57 | R2 detection (6.5h in) | — | — |
-| hd σ=3.0–4.0 (×3) | midscale_v1_hd_sigma* | — | PENDING (Wave B) | — | — |
-| hw σ=0.1–2.5 (×6) | midscale_v1_hw_sigma* | 2026-05-22 10:57 | R2 detection (6.5h in) | — | — |
-| hw σ=3.0–4.0 (×3) | midscale_v1_hw_sigma* | — | PENDING (Wave B) | — | — |
-| id σ=0.1–2.5 (×6) | midscale_v1_id_sigma* | 2026-05-22 10:57 | R2 detection (6.5h in) | — | — |
-| id σ=3.0–4.0 (×3) | midscale_v1_id_sigma* | — | PENDING (Wave B) | — | — |
-| f9 σ=3.0–4.0 (×3) | midscale_v1_f9_sigma* | 2026-05-22 10:59 | R2 detection (6.5h in) | — | — |
-| f9 σ=0.1/0.5/1.0 | midscale_v1_f9_sigma* | 2026-05-22 11:05 | R2 detection (4h in) | — | — |
-| f9 σ=1.5/2.0/2.5 | midscale_v1_f9_sigma* | 2026-05-22 ~15:00 | R2 detection (just entered) | — | — |
+**Status as of 2026-05-23 ~12:00 — all 36 runs active:**
+
+| Run | Sandbox | Started | Status (2026-05-23 ~12:00) |
+|-----|---------|---------|---------------------------|
+| hd σ=0.1–2.5 (×6) | midscale_v1_hd_sigma* | 2026-05-22 10:57 | Mixed: some in training, some in R2 |
+| hd σ=3.0–4.0 (×3) | midscale_v1_hd_sigma* | 2026-05-23 11:52 | Trace deploy / early R2 |
+| hw σ=0.1–2.5 (×6) | midscale_v1_hw_sigma* | 2026-05-22 10:57 | Mixed: some in training, some in R2 |
+| hw σ=3.0–4.0 (×3) | midscale_v1_hw_sigma* | 2026-05-23 11:52 | Trace deploy / early R2 |
+| id σ=0.1–2.5 (×6) | midscale_v1_id_sigma* | 2026-05-22 10:57 | Mixed: some in SASCA, some in R2 |
+| id σ=3.0–4.0 (×3) | midscale_v1_id_sigma* | 2026-05-23 11:52 | Trace deploy / early R2 |
+| f9 σ=3.0–4.0 (×3) | midscale_v1_f9_sigma* | 2026-05-22 10:59 | Training (restarted with ICS=50) |
+| f9 σ=0.1/0.5/1.0 | midscale_v1_f9_sigma* | 2026-05-22 11:05 | R2 detection |
+| f9 σ=1.5/2.0/2.5 | midscale_v1_f9_sigma* | 2026-05-22 ~15:00 | R2 detection |
 
 ---
 

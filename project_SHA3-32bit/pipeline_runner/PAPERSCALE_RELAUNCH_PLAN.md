@@ -5,6 +5,12 @@
 > (30 det sets, 200 TR sets) — see `RUN_LOG.md` and `envs/midscale_v1_sigma_sweep/`.
 > Paperscale sandboxes and trace dirs preserved on IDP. Resume paperscale after midscale
 > results are in hand. Correct safe R2 concurrent limit: **≤18** (not ≤24 as written below).
+>
+> **ICS level note (2026-05-23):** Midscale f9 σ=3.0/3.5/4.0 runs found no ICS at threshold
+> 90 — `ics_original_090.zip` was empty. Level 50 worked (131–141 KB archives). When
+> relaunching paperscale f9 high-noise runs, set SHA3_TRAINING_ICS_LEVEL=50 (and matching
+> VALIDATION_TEMPLATE_TAG, VALIDATION_ICS_TAG, SASCA_TEMPLATE_TAG, SASCA_ICS_TAG).
+> Whether mid-noise f9 σ=1.5–2.5 also needs this will be known after midscale completes.
 
 ## Context
 
