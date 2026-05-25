@@ -14,6 +14,7 @@ ICS_CHECK_SCRIPT="${SCRIPT_DIR}/check_ics_archive.py"
 
 ENV_FILE="${PROJECT_DIR}/.env_debug"
 SKIP_SIM=0
+SKIP_DETECTION=0
 SKIP_CHAIN=0
 KEEP_LOCAL_ZIPS=0
 PARALLEL_SCANS=1
@@ -36,6 +37,7 @@ Options:
   --env-file PATH     Env profile to apply as project .env (default: ../.env_debug)
   --traces-dir PATH   Explicit TRACES_DIR for this run (overrides shell env)
   --skip-sim          Skip trace simulation/zip/deploy and only run 0001-0005 chain
+  --skip-detection    Skip sim/deploy/0001/0002 and re-run 0003-0005 (ICS archives must exist)
   --skip-chain        Only simulate+deploy traces, do not run 0001-0005 chain
   --keep-local-zips   Keep generated zip files in TRACES_DIR as copies
   --serial-scans      Run 0005 scan stages serially instead of in parallel (parallel is default)
@@ -65,6 +67,11 @@ while [ "$#" -gt 0 ]; do
       shift 2
       ;;
     --skip-sim)
+      SKIP_SIM=1
+      shift
+      ;;
+    --skip-detection)
+      SKIP_DETECTION=1
       SKIP_SIM=1
       shift
       ;;
@@ -112,7 +119,7 @@ if [ -z "${TRACES_DIR:-}" ] && [ "$SKIP_SIM" -eq 0 ]; then
   exit 1
 fi
 
-if [ "$SKIP_SIM" -eq 1 ] && [ -z "${TRACES_DIR:-}" ]; then
+if [ "$SKIP_SIM" -eq 1 ] && [ "$SKIP_DETECTION" -eq 0 ] && [ -z "${TRACES_DIR:-}" ]; then
   echo "Error: --skip-sim requires TRACES_DIR to be set (needed for zip+deploy)" >&2
   exit 1
 fi
@@ -423,21 +430,24 @@ if [ "$SKIP_SIM" -eq 0 ]; then
   simulate_group "DN" "${SHA3_DETECTION_SET_COUNT}" "${SHA3_INPUTS}" "${SIM_SEED_DN:-256}"
   simulate_group "TR" "${SHA3_TRAINING_SET_COUNT}" "${SHA3_INPUTS}" "${SIM_SEED_TR:-512}"
   simulate_group "TS" "${SHA3_VALIDATION_SET_COUNT}" "${SHA3_VALIDATION_INPUTS}" "${SIM_SEED_TS:-1024}"
-else
+elif [ "$SKIP_DETECTION" -eq 0 ]; then
   log "INFO : --skip-sim: zipping and deploying existing traces from TRACES_DIR=${TRACES_DIR}"
   deploy_group "RE" "${PROJECT_DIR}/0001_reference/Raw"
   deploy_group "DN" "${PROJECT_DIR}/0002_detection/Raw"
   deploy_group "TR" "${PROJECT_DIR}/0003_training/Raw"
   deploy_group "TS" "${PROJECT_DIR}/0004_validation/Raw"
 fi
+# --skip-detection: Raw/ dirs already populated from previous run; no simulation or deploy needed
 
 if [ "$SKIP_CHAIN" -eq 0 ]; then
-  run_stage "0001 reference" "0001_reference/Code_reference"
+  if [ "$SKIP_DETECTION" -eq 0 ]; then
+    run_stage "0001 reference" "0001_reference/Code_reference"
 
-  run_stage "0002 detection preprocessing" "0002_detection/Code_preprocessing"
-  run_stage "0002 detection intermediate values" "0002_detection/Code_intermediate_values"
-  run_stage "0002 detection R2" "0002_detection/Code_detection_R2"
-  run_stage "0002 detection ICS extraction" "0002_detection/Code_extract_ics"
+    run_stage "0002 detection preprocessing" "0002_detection/Code_preprocessing"
+    run_stage "0002 detection intermediate values" "0002_detection/Code_intermediate_values"
+    run_stage "0002 detection R2" "0002_detection/Code_detection_R2"
+    run_stage "0002 detection ICS extraction" "0002_detection/Code_extract_ics"
+  fi
   validate_training_ics_archive
 
   run_stage "0003 training preprocessing" "0003_training/Code_preprocessing"
