@@ -167,29 +167,29 @@ done'
 
 fix_ics() {
   mode="$1"; sigma_s="$2"; level="$3"
-  level3=$(printf "%03d" "${level}")
   sb="/storage/ge96pug/Projects_SHA3_sandbox_paperscale_v3_${mode}_sigma${sigma_s}/project_SHA3-32bit"
-  echo "Applying ICS fix: ${mode}_sigma${sigma_s} → level ${level} (${level3})"
+  echo "Applying ICS fix: ${mode}_sigma${sigma_s} → level ${level}"
   if [ "${DRY_RUN}" -eq 1 ]; then
     echo "  [DRY RUN] would update ${sb}/.env and apply --skip-detection"
     return
   fi
-  # Update sandbox .env
+  # Store as plain integer (no leading zeros) — pack.sh pads with printf internally.
+  # Leading zeros in shell env would be interpreted as octal by printf '%03d'.
   ssh IDP "sed -i \
     -e 's/SHA3_TRAINING_ICS_LEVEL=.*/SHA3_TRAINING_ICS_LEVEL=${level}/' \
-    -e 's/SHA3_VALIDATION_TEMPLATE_TAG=.*/SHA3_VALIDATION_TEMPLATE_TAG=${level3}/' \
-    -e 's/SHA3_VALIDATION_ICS_TAG=.*/SHA3_VALIDATION_ICS_TAG=${level3}/' \
-    -e 's/SHA3_SASCA_TEMPLATE_TAG=.*/SHA3_SASCA_TEMPLATE_TAG=${level3}/' \
-    -e 's/SHA3_SASCA_ICS_TAG=.*/SHA3_SASCA_ICS_TAG=${level3}/' \
+    -e 's/SHA3_VALIDATION_TEMPLATE_TAG=.*/SHA3_VALIDATION_TEMPLATE_TAG=${level}/' \
+    -e 's/SHA3_VALIDATION_ICS_TAG=.*/SHA3_VALIDATION_ICS_TAG=${level}/' \
+    -e 's/SHA3_SASCA_TEMPLATE_TAG=.*/SHA3_SASCA_TEMPLATE_TAG=${level}/' \
+    -e 's/SHA3_SASCA_ICS_TAG=.*/SHA3_SASCA_ICS_TAG=${level}/' \
     \"${sb}/.env\""
   # Also update local env file
   env_file="${ENVS_BASE}/sigma${sigma_s}/.env_paperscale_v3_${mode}_sigma${sigma_s}"
   sed -i \
     -e "s/SHA3_TRAINING_ICS_LEVEL=.*/SHA3_TRAINING_ICS_LEVEL=${level}/" \
-    -e "s/SHA3_VALIDATION_TEMPLATE_TAG=.*/SHA3_VALIDATION_TEMPLATE_TAG=${level3}/" \
-    -e "s/SHA3_VALIDATION_ICS_TAG=.*/SHA3_VALIDATION_ICS_TAG=${level3}/" \
-    -e "s/SHA3_SASCA_TEMPLATE_TAG=.*/SHA3_SASCA_TEMPLATE_TAG=${level3}/" \
-    -e "s/SHA3_SASCA_ICS_TAG=.*/SHA3_SASCA_ICS_TAG=${level3}/" \
+    -e "s/SHA3_VALIDATION_TEMPLATE_TAG=.*/SHA3_VALIDATION_TEMPLATE_TAG=${level}/" \
+    -e "s/SHA3_VALIDATION_ICS_TAG=.*/SHA3_VALIDATION_ICS_TAG=${level}/" \
+    -e "s/SHA3_SASCA_TEMPLATE_TAG=.*/SHA3_SASCA_TEMPLATE_TAG=${level}/" \
+    -e "s/SHA3_SASCA_ICS_TAG=.*/SHA3_SASCA_ICS_TAG=${level}/" \
     "${env_file}"
   echo "  Updated ${sb}/.env"
   echo "  Updated local ${env_file}"
