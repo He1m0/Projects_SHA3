@@ -99,6 +99,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+# Resolve ENV_FILE to absolute path; POSIX dot-source searches PATH when no slash is present.
+ENV_FILE="$(cd "$(dirname "${ENV_FILE}")" && pwd)/$(basename "${ENV_FILE}")"
+
 if [ ! -f "${ENV_FILE}" ]; then
   echo "Error: env file not found: ${ENV_FILE}" >&2
   exit 1
@@ -125,7 +128,7 @@ if [ "$SKIP_SIM" -eq 1 ] && [ "$SKIP_DETECTION" -eq 0 ] && [ -z "${TRACES_DIR:-}
 fi
 
 # Apply selected environment profile for all project scripts.
-cp "${ENV_FILE}" "${PROJECT_DIR}/.env"
+[ "${ENV_FILE}" -ef "${PROJECT_DIR}/.env" ] || cp "${ENV_FILE}" "${PROJECT_DIR}/.env"
 
 set -a
 # shellcheck disable=SC1090
