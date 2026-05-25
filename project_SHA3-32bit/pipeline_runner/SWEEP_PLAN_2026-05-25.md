@@ -237,17 +237,17 @@ before allowing training to proceed.
 
 ## Progress Checklist
 
-- [ ] Midscale f9 σ=4.0: fix at level 40 (mandatory)
-- [ ] Midscale f9 σ=3.0: fix at level 70 (recommended)
-- [ ] Midscale hd/hw/id σ=3.0: fix at level 70 (recommended)
-- [ ] Midscale hd/hw/id σ=3.5: fix at level 50 (recommended)
-- [ ] Midscale hd/hw/id σ=4.0: fix at level 40 (recommended)
-- [ ] Midscale local env files updated + committed
-- [ ] All 36 midscale runs archived
+- [x] Midscale f9 σ=4.0: fix at level 40 (mandatory) — launched 2026-05-25, training in progress
+- [x] Midscale f9 σ=3.0: fix at level 70 (recommended) — launched 2026-05-25, training in progress
+- [x] Midscale hd/hw/id σ=3.0: fix at level 70 (recommended) — launched 2026-05-25, training in progress
+- [x] Midscale hd/hw/id σ=3.5: fix at level 50 (recommended) — launched 2026-05-25, training in progress
+- [x] Midscale hd/hw/id σ=4.0: fix at level 40 (recommended) — launched 2026-05-25, training in progress
+- [x] Midscale local env files updated + committed (sigma3p0→70, sigma3p5→50, sigma4p0→40)
+- [ ] All 36 midscale runs archived (waiting for 11 fix runs + f9σ3p5 to complete)
 - [ ] RUN_LOG.md updated with midscale archive info
-- [ ] Smoke v3 env files created
-- [ ] Smoke v3 launched (all 36, --skip-sim)
-- [ ] Smoke v3 ICS boundary scan done
+- [x] Smoke v3 env files created (36 files in envs/smoke_v3_ics_sweep/, committed 8578f27)
+- [x] Smoke v3 launched (all 36, simulating fresh traces — hd/hw/id TRACES_DIR removed as paperscale_v2 traces gone)
+- [ ] Smoke v3 ICS boundary scan done (waiting for all 36 to show [MOVE:DN])
 - [ ] Smoke v3 training levels updated + training restarted
 - [ ] Smoke v3 archived + compare_runs.py comparison done
 - [ ] Paperscale v3 env files created
