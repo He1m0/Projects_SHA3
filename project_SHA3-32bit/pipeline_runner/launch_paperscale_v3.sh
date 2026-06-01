@@ -122,19 +122,21 @@ for mode in hd hw id f9; do
       echo "  not_started ${mode}_sigma${sig}"
       continue
     fi
-    complete=$(grep -c "COMPLETE: run_full_pipeline finished\|COMPLETE.*run_full_pipeline" "$log" 2>/dev/null || echo 0)
-    # also check sandbox log for COMPLETE in case fix_log lacks it
-    if [ "$complete" -eq 0 ] && [ -f "$sandbox_log" ] && [ "$log" != "$sandbox_log" ]; then
-      complete=$(grep -c "COMPLETE: run_full_pipeline finished\|COMPLETE.*run_full_pipeline" "$sandbox_log" 2>/dev/null || echo 0)
-    fi
-    movedn=$(grep -c "\[MOVE:DN\]" "$log" 2>/dev/null || echo 0)
+    if grep -q "COMPLETE" "$log" 2>/dev/null; then complete=1
+    elif [ -f "$sandbox_log" ] && grep -q "COMPLETE" "$sandbox_log" 2>/dev/null; then complete=1
+    else complete=0; fi
+    # fix_log = post-detection by definition; otherwise check sandbox log for [MOVE:DN]
+    if [ -n "$log_label" ]; then
+      movedn=1
+    elif grep -q "\[MOVE:DN\]" "$log" 2>/dev/null; then movedn=1
+    else movedn=0; fi
     last=$(tail -1 "$log" 2>/dev/null | cut -c1-80)
     if [ "$complete" -eq 1 ]; then
       echo "  DONE     ${mode}_sigma${sig}"
-    elif [ "$movedn" -ge 1 ]; then
+    elif [ "$movedn" -eq 1 ]; then
       echo "  training ${mode}_sigma${sig}${log_label}: $last"
     else
-      echo "  detect   ${mode}_sigma${sig}${log_label}: $last"
+      echo "  detect   ${mode}_sigma${sig}: $last"
     fi
   done
 done'
