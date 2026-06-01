@@ -101,27 +101,40 @@ launch_batch() {
 show_status() {
   echo "=== Paperscale v3 status ==="
   r2_count=$(ssh IDP "pgrep -c -f detect_script 2>/dev/null || echo 0")
-  echo "R2 processes running: ${r2_count} / 18"
+  echo "R2 processes running: ${r2_count} / 10"
   echo ""
   echo "Per-run state (last log line):"
   ssh IDP '
 for mode in hd hw id f9; do
   for sig in 0p1 0p5 1p0 1p5 2p0 2p5 3p0 3p5 4p0; do
     sb=/storage/ge96pug/Projects_SHA3_sandbox_paperscale_v3_${mode}_sigma${sig}
-    log="$sb/project_SHA3-32bit/pipeline_runner/sandbox_paperscale_v3_${mode}_sigma${sig}.log"
-    if [ -f "$log" ]; then
-      complete=$(grep -c "COMPLETE: run_full_pipeline finished" "$log" 2>/dev/null || echo 0)
-      movedn=$(grep -c "\[MOVE:DN\]" "$log" 2>/dev/null || echo 0)
-      last=$(tail -1 "$log" 2>/dev/null | cut -c1-80)
-      if [ "$complete" -eq 1 ]; then
-        echo "  DONE     ${mode}_sigma${sig}"
-      elif [ "$movedn" -ge 1 ]; then
-        echo "  training ${mode}_sigma${sig}: $last"
-      else
-        echo "  detect   ${mode}_sigma${sig}: $last"
-      fi
+    plr="$sb/project_SHA3-32bit/pipeline_runner"
+    sandbox_log="$plr/sandbox_paperscale_v3_${mode}_sigma${sig}.log"
+    fix_log="$plr/paperscale_v3_${mode}_sigma${sig}.log"
+    # prefer fix_log if it exists (created when ICS fix re-launched training/SASCA)
+    if [ -f "$fix_log" ]; then
+      log="$fix_log"
+      log_label="[fix]"
+    elif [ -f "$sandbox_log" ]; then
+      log="$sandbox_log"
+      log_label=""
     else
       echo "  not_started ${mode}_sigma${sig}"
+      continue
+    fi
+    complete=$(grep -c "COMPLETE: run_full_pipeline finished\|COMPLETE.*run_full_pipeline" "$log" 2>/dev/null || echo 0)
+    # also check sandbox log for COMPLETE in case fix_log lacks it
+    if [ "$complete" -eq 0 ] && [ -f "$sandbox_log" ] && [ "$log" != "$sandbox_log" ]; then
+      complete=$(grep -c "COMPLETE: run_full_pipeline finished\|COMPLETE.*run_full_pipeline" "$sandbox_log" 2>/dev/null || echo 0)
+    fi
+    movedn=$(grep -c "\[MOVE:DN\]" "$log" 2>/dev/null || echo 0)
+    last=$(tail -1 "$log" 2>/dev/null | cut -c1-80)
+    if [ "$complete" -eq 1 ]; then
+      echo "  DONE     ${mode}_sigma${sig}"
+    elif [ "$movedn" -ge 1 ]; then
+      echo "  training ${mode}_sigma${sig}${log_label}: $last"
+    else
+      echo "  detect   ${mode}_sigma${sig}${log_label}: $last"
     fi
   done
 done'
@@ -199,6 +212,9 @@ fix_ics() {
     -e "s/SHA3_SASCA_TEMPLATE_TAG=.*/SHA3_SASCA_TEMPLATE_TAG=${level}/" \
     -e "s/SHA3_SASCA_ICS_TAG=.*/SHA3_SASCA_ICS_TAG=${level}/" \
     "${env_file}"
+  # Append a redirect marker to the original sandbox log so the trail is visible there too.
+  ssh IDP "echo '[FIX $(date +%Y-%m-%dT%H:%M)] ICS level corrected to ${level}. Re-run logs to: pipeline_runner/paperscale_v3_${mode}_sigma${sigma_s}.log' \
+    >> \"${sb}/pipeline_runner/sandbox_paperscale_v3_${mode}_sigma${sigma_s}.log\" 2>/dev/null || true"
   echo "  Updated ${sb}/.env"
   echo "  Updated local ${env_file}"
   echo "  Next: re-launch training with --skip-detection (run_sandboxes.sh or run_full_pipeline.sh)"
