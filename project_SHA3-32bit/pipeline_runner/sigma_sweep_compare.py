@@ -6,7 +6,7 @@ Produces two figures:
   2. Cross-mode (2×2): one panel per metric, all modes overlaid
 
 Usage:
-    python tmp_sigma_sweep_compare.py [--out-prefix PREFIX] [--archive-root DIR]
+    python sigma_sweep_compare.py [--out-prefix PREFIX] [--archive-root DIR]
 """
 from __future__ import annotations
 
@@ -21,19 +21,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ARCHIVE_ROOT_DEFAULT = Path(__file__).parent / "runs_archive" / "smoke_v2"
-SASCA_N_TRACES = 50   # SHA3_SASCA_TRACE_COUNT for smoke runs
 RAND_SR_TEMPLATE = 1.0 / 256.0
 
 SIGMAS = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
 
-# Archive name patterns for each mode (sigma label → archive dir prefix search)
-# We pick the latest archive whose name contains the mode+sigma pattern.
-MODE_PATTERNS = {
-    "hw": "smoke_v2_hw_sigma",
-    "hd": "smoke_v2_hd_sigma",
-    "id": "smoke_v2_id_sigma",
-    "f9": "smoke_v2_f9_sigma",
-}
+# Archive name patterns are derived at runtime from the archive root's basename
+# (e.g. root "midscale_v1" → pattern "midscale_v1_f9_sigma").
+# find_archive() matches the glob *_{pattern}{sigma_str} inside root.
 
 MODE_COLORS = {"hw": "#1f77b4", "hd": "#ff7f0e", "id": "#2ca02c", "f9": "#d62728"}
 MODE_LABELS = {"hw": "HW", "hd": "HD", "id": "ID", "f9": "F9"}
@@ -94,26 +88,41 @@ def load_template_by_family(archive: Path) -> dict[str, float] | None:
     return {k: float(np.mean(v)) for k, v in fam.items()}
 
 
-def load_sasca_auc(archive: Path, depth: str) -> float | None:
-    """Mean success fraction across the full rate scan (AUC proxy)."""
+def _load_rate_scan_raw(archive: Path, depth: str) -> np.ndarray | None:
     p = archive / "0005_SASCA" / "Rate_Scan" / f"rate_scan_{depth}_B.npy"
     if not p.exists():
         return None
-    b = np.load(p, allow_pickle=True)
-    return float(b.mean()) / SASCA_N_TRACES
+    return np.load(p, allow_pickle=True)
+
+
+def _n_traces_from_array(b: np.ndarray) -> int:
+    """Infer SASCA_TRACE_COUNT as the maximum success count in the rate-scan array.
+
+    Index 0 (all oracle bits provided) always converges fully, so b[0] == N_TRACES.
+    """
+    return int(b.max()) if b.max() > 0 else 50
+
+
+def load_sasca_auc(archive: Path, depth: str) -> float | None:
+    """Mean success fraction across the full rate scan (AUC proxy)."""
+    b = _load_rate_scan_raw(archive, depth)
+    if b is None:
+        return None
+    n = _n_traces_from_array(b)
+    return float(b.mean()) / n
 
 
 def load_sasca_curve(archive: Path, depth: str) -> np.ndarray | None:
-    """Full rate-scan success curve (fraction), shape (21,)."""
-    p = archive / "0005_SASCA" / "Rate_Scan" / f"rate_scan_{depth}_B.npy"
-    if not p.exists():
+    """Full rate-scan success curve (fraction)."""
+    b = _load_rate_scan_raw(archive, depth)
+    if b is None:
         return None
-    b = np.load(p, allow_pickle=True)
-    return b.astype(float) / SASCA_N_TRACES
+    n = _n_traces_from_array(b)
+    return b.astype(float) / n
 
 
 def collect_mode_data(root: Path, mode: str) -> dict:
-    pattern = MODE_PATTERNS[mode]
+    pattern = f"{root.name}_{mode}_sigma"
     data = {
         "sigma": [], "template_sr": [], "template_ge": [],
         "sasca_2R": [], "sasca_3R": [], "sasca_4R": [],
@@ -265,10 +274,9 @@ def fig_rate_scan_grid(all_data: dict, root: Path, out: Path) -> None:
 
     cmap = plt.cm.plasma
     sigma_norm = plt.Normalize(vmin=min(SIGMAS), vmax=max(SIGMAS))
-    x_pos = np.linspace(0, 1, 21)
 
     for row, mode in enumerate(modes):
-        pattern = MODE_PATTERNS[mode]
+        pattern = f"{root.name}_{mode}_sigma"
         for col, depth in enumerate(depths):
             ax = axes[row][col]
             if row == 0:
@@ -283,6 +291,7 @@ def fig_rate_scan_grid(all_data: dict, root: Path, out: Path) -> None:
                 if curve is None:
                     continue
                 color = cmap(sigma_norm(s))
+                x_pos = np.linspace(0, 1, len(curve))
                 ax.plot(x_pos, curve, color=color, lw=1.5, alpha=0.85)
             ax.set_ylim(-0.05, 1.05)
             ax.axhline(0.0, color="grey", ls=":", lw=0.7)

@@ -1,26 +1,61 @@
-# Template attacks on SHA-3 implementations
+# Template attacks on SHA-3 (Keccak)
 
-This repository contains two projects of template attacks on SHA-3 (Keccak) functions implemented on different devices.
+IDP research project: template side-channel attacks on SHA-3 / Keccak-f[1600]
+using synthetic power traces from a software simulator.
 
-1.  **project\_SHA3-XMEGA:** an 8-bit implementation of hash function SHA3-512 on a side-channel test board with an Atmel XMEGA 256 A3U microcontroller, designed by [Marios Omar Choudary](https://www.cl.cam.ac.uk/~osc22/docs/efficient_templates.pdf).  
-    _The code of this project is still under review and is expected to be available before the end of July 2024._
+## Active project
 
-2.  **project\_SHA3-32bit:** a 32-bit implementation of four SHA-3 hash functions (SHA3-512, SHA3-384, SHA3-256, SHA3-224) and two SHAKE extendable-output functions (SHAKE256, SHAKE128) on [ChipWhisperer-Lite 32-bit board](https://rtfm.newae.com/Starter%20Kits/ChipWhisperer-Lite/#1-part-32-bit)
+**`project_SHA3-32bit/`** — 32-bit ARM Cortex-M4 (STM32F303RCT7, ChipWhisperer-Lite).
+Pipeline phases 0001–0011 cover reference generation, R² detection, LDA template profiling,
+validation, SASCA belief-propagation attack, and per-algorithm tests
+(SHA3-512/384/256/224, SHAKE256/128).
 
-These codes and experiments are related to my PhD thesis and two peer-reviewed papers:
+**`KeccakSim_v2.py`** (repo root) — active simulator. Generates synthetic HW/HD/ID/F9 power
+traces for Keccak-f[1600]; invoked by `project_SHA3-32bit/pipeline_runner/run_full_pipeline.sh`.
 
- -  Shih-Chun You:  
-    _Single-trace template attacks on permutation-based cryptography_,  
-    Apollo - University of Cambridge Repository, PhD thesis, 2022,  
-    [DOI: 10.17863/CAM.100592](https://doi.org/10.17863/CAM.100592)  
+**`Bit_Tables/`** — precomputed bit-to-byte lookup tables for SASCA.
 
- -  Shih-Chun You, Markus G. Kuhn:  
-    _A template attack to reconstruct the input of SHA-3 on an 8-bit device_,  
-    International Workshop on Constructive Side-Channel Analysis and Secure Design  
-    (COSADE 2020), Pages 25-42, LNCS 12244,  
-    [DOI: 10.1007/978-3-030-68773-1_2](https://doi.org/10.1007/978-3-030-68773-1_2)  
+## Running the pipeline
 
- -  Shih-Chun You, Markus G. Kuhn:  
-    _Single-trace fragment template attack on a 32-bit implementation of Keccak_,  
-    CARDIS 2021, 11–12 November 2021, Lübeck, Springer, LNCS 13173, 2022,  
-    [DOI: 10.1007/978-3-030-97348-3_1](https://doi.org/10.1007/978-3-030-97348-3_1)
+See `project_SHA3-32bit/pipeline_runner/EVALUATION_GUIDE.md` for the full evaluation workflow
+and `CLAUDE.md` for developer guidance.
+
+Quick start:
+```sh
+cd project_SHA3-32bit/pipeline_runner
+./run_full_pipeline.sh --env-file envs/.env_smoke_v3_f9_sigma1p0
+```
+
+## Status docs (active)
+
+| File | Contents |
+|------|----------|
+| `findings_2026-05-21.md` | Full 4-mode sigma sweep analysis (smoke scale) |
+| `findings_2026-05-25.md` | ICS mechanics, cross-scale comparability |
+| `findings_2026-05-26.md` | Smoke v3 run status, ICS boundaries, midscale fix timing |
+| `pipeline_explainer.md` | Full technical breakdown of all pipeline phases |
+
+## Repo structure
+
+```
+Projects_SHA3/
+├── project_SHA3-32bit/    active pipeline + phases 0001-0011
+├── project_SHA3-XMEGA/    legacy 8-bit XMEGA project (static)
+├── KeccakSim_v2.py        active simulator
+├── Bit_Tables/            precomputed SASCA tables
+├── student_thesis/        LaTeX thesis
+├── _legacy/               superseded code (KeccakSim_BI_TA.py)
+├── _old/                  historical findings and planning docs
+├── findings_2026-*.md     active status/findings docs
+├── CLAUDE.md              developer guidance for Claude Code
+└── GEMINI.md              architecture overview
+```
+
+`project_SHA3-32bit/pipeline_runner/runs_archive/` (gitignored, local only) holds
+snapshots of completed pipeline runs organised by scale:
+`smoke_v3/`, `midscale_v1/`, `paperscale_v3/`, `smoke_v2/`, `_legacy/`.
+
+## Reference
+
+S.-C. You, M. G. Kuhn: *Single-trace fragment template attack on a 32-bit implementation
+of Keccak*, CARDIS 2021, LNCS 13173.

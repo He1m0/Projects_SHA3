@@ -243,16 +243,48 @@ before allowing training to proceed.
 - [x] Midscale hd/hw/id σ=3.5: fix at level 50 (recommended) — launched 2026-05-25, training in progress
 - [x] Midscale hd/hw/id σ=4.0: fix at level 40 (recommended) — launched 2026-05-25, training in progress
 - [x] Midscale local env files updated + committed (sigma3p0→70, sigma3p5→50, sigma4p0→40)
-- [ ] All 36 midscale runs archived (waiting for 11 fix runs + f9σ3p5 to complete)
-- [ ] RUN_LOG.md updated with midscale archive info
+- [x] All 36 midscale runs archived → `runs_archive/midscale_v1/` (35/36; f9 σ=4.0 still running as of 2026-05-31)
+- [x] Midscale f9 σ=3.0 archived 2026-05-31 → `runs_archive/midscale_v1/2026-05-31_midscale_v1_f9_sigma3p0`
+- [x] RUN_LOG.md updated with midscale archive info
 - [x] Smoke v3 env files created (36 files in envs/smoke_v3_ics_sweep/, committed 8578f27)
 - [x] Smoke v3 launched (all 36, simulating fresh traces — hd/hw/id TRACES_DIR removed as paperscale_v2 traces gone)
-- [ ] Smoke v3 ICS boundary scan done (waiting for all 36 to show [MOVE:DN])
-- [ ] Smoke v3 training levels updated + training restarted
-- [ ] Smoke v3 archived + compare_runs.py comparison done
-- [ ] Paperscale v3 env files created
-- [ ] Paperscale v3 Wave A launched (hd+hw, 18 runs)
-- [ ] Paperscale v3 Wave B triggered (id, 9 runs)
-- [ ] Paperscale v3 f9 simulation + R2 batches managed
-- [ ] Paperscale v3 ICS check done per sigma slice before training
+- [x] Smoke v3 ICS boundary scan done
+- [x] Smoke v3 training levels updated + training restarted
+- [x] Smoke v3 archived → `runs_archive/smoke_v3/` (all 36, 2026-05-26)
+- [x] Paperscale v3 env files created
+- [x] Paperscale v3 launched (sigma4p0 + sigma3p5, 2026-05-26; sigma3p0 2026-05-27)
+- [x] Paperscale v3 ICS check done for σ=3.0/3.5/4.0 (2026-05-31) — paperscale boundaries differ from midscale (fresh traces)
+- [x] Paperscale v3 f9 σ=3.5/4.0 restarted from validation at corrected ICS levels (30/40)
+- [x] Paperscale v3 f9 σ=3.0 training restarted at corrected ICS level 60
+- [x] Paperscale v3 sigma2p5+sigma2p0 (8 runs): launched 2026-05-31 ~15:45 (waves A2/B2/C2/D2 partial), simulating
+- [ ] Paperscale v3 sigma1p5–sigma0p1 (16 runs): queued — killed after launch to avoid R2 OOM; relaunch when σ=2.0/2.5 R2 finishes and count ≤6
 - [ ] Paperscale v3 archived + final comparison
+
+**R2 concurrency lesson 2026-05-31:** Launching all 24 remaining runs simultaneously was wrong —
+all simulations take equal time and would hit R2 together, peaking at 24×33+59≈851 GB > CommitLimit 511 GB.
+Correct approach: launch ≤6 runs at a time so peak R2 ≤6+existing ≤10.
+- [ ] Paperscale v3 archived + final comparison
+
+---
+
+## Cross-scale comparability issue discovered 2026-05-27
+
+After archiving smoke v3 and midscale v1, rate-scan AUC values were found **non-comparable**
+between scales:
+
+- Smoke v3: 21 pts × 64 bits → max oracle coverage = 1280 bits (misses near-zero cliff)
+- Midscale v1: 101 pts × 16 bits → max = 1600 bits (same range as paperscale/reference)
+- Paperscale v3 / reference: 201 pts × 8 bits → max = 1600 bits ✓
+
+**Consequence:** smoke v3 AUC systematically ~7% higher than midscale at F9 σ=0.1 (1.00 vs 0.93)
+because the hard near-zero oracle region is never sampled. This was not a regression —
+smoke v3 and midscale use different x-axes.
+
+**Fix applied 2026-05-27:**
+1. `sigma_sweep_compare.py`: replaced hardcoded `SASCA_N_TRACES=50` with per-archive inference
+   from `b.max()` (array index 0 = all oracle = always N_TRACES successes). Also fixed rate-scan
+   grid to use `len(curve)` instead of hardcoded 21. Mode patterns now auto-derived from `root.name`.
+2. `envs/smoke_v4_201pt/`: 36 new env files (smoke v3 params + 201/8 rate-scan).
+3. Smoke v4 SASCA re-run launched 2026-05-27 ~16:13 on all 36 smoke_v3 sandboxes in parallel
+   (env files updated in-place; logs at `pipeline_runner/sasca_v4_rerun.log`).
+   After completion → archive as `smoke_v4` for use in cross-scale comparisons.
