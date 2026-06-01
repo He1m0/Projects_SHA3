@@ -3,22 +3,21 @@
 set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-PROJECT_DIR="${SCRIPT_DIR}"
+PROJECT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 print_help() {
   cat <<'EOF'
 Usage:
-  sh run_0002_chain.sh
+  sh run_0004_chain.sh
 
 Description:
-  Runs the full 0002 detection chain in order:
+  Runs the full 0004 validation chain in order:
     1) Code_preprocessing
     2) Code_intermediate_values
-    3) Code_detection_R2
-    4) Code_extract_ics
+    3) template_validation_bytes
 
 Assumption:
-  0002_detection/Raw already contains detection trace archives (*.zip).
+  0004_validation/Raw already contains validation trace archives (*.zip).
 EOF
 }
 
@@ -60,11 +59,10 @@ run_stage() {
   log "DONE : ${LABEL}"
 }
 
-require_non_empty_raw "${PROJECT_DIR}/0002_detection/Raw"
+require_non_empty_raw "${PROJECT_DIR}/0004_validation/Raw"
 
-run_stage "0002 detection preprocessing" "0002_detection/Code_preprocessing"
-run_stage "0002 detection intermediate values" "0002_detection/Code_intermediate_values"
-run_stage "0002 detection R2" "0002_detection/Code_detection_R2"
-run_stage "0002 detection ICS extraction" "0002_detection/Code_extract_ics"
+run_stage "0004 validation preprocessing" "0004_validation/Code_preprocessing"
+run_stage "0004 validation intermediate values" "0004_validation/Code_intermediate_values"
+run_stage "0004 validation template validation" "0004_validation/template_validation_bytes"
 
-log "COMPLETE: 0002 detection chain finished"
+log "COMPLETE: 0004 validation chain finished"

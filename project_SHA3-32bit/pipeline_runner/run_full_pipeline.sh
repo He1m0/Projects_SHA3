@@ -201,7 +201,7 @@ wait_for_pids() {
 }
 
 validate_training_ics_archive() {
-  ICS_LEVEL_STR="$(printf '%03d' "${SHA3_TRAINING_ICS_LEVEL:-10}")"
+  ICS_LEVEL_STR="$(printf '%03d' "$((10#${SHA3_TRAINING_ICS_LEVEL:-10}))")"
   ICS_ZIP="${PROJECT_DIR}/0002_detection/Code_extract_ics/ics_original_${ICS_LEVEL_STR}.zip"
 
   if [ ! -f "${ICS_CHECK_SCRIPT}" ]; then

@@ -3,21 +3,19 @@
 set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-PROJECT_DIR="${SCRIPT_DIR}"
+PROJECT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 print_help() {
   cat <<'EOF'
 Usage:
-  sh run_0004_chain.sh
+  sh run_0001_chain.sh
 
 Description:
-  Runs the full 0004 validation chain in order:
-    1) Code_preprocessing
-    2) Code_intermediate_values
-    3) template_validation_bytes
+  Runs the 0001 reference stage:
+    1) Code_reference  (produces ref_trace.npy)
 
 Assumption:
-  0004_validation/Raw already contains validation trace archives (*.zip).
+  0001_reference/Raw already contains reference trace archives (*.zip).
 EOF
 }
 
@@ -36,7 +34,6 @@ require_non_empty_raw() {
     echo "Error: Raw directory not found: ${RAW_DIR}" >&2
     exit 1
   fi
-
   ZIP_COUNT="$(find "${RAW_DIR}" -maxdepth 1 -type f -name '*.zip' | wc -l | tr -d ' ')"
   if [ "${ZIP_COUNT}" -eq 0 ]; then
     echo "Error: no .zip trace archives found in ${RAW_DIR}" >&2
@@ -59,10 +56,8 @@ run_stage() {
   log "DONE : ${LABEL}"
 }
 
-require_non_empty_raw "${PROJECT_DIR}/0004_validation/Raw"
+require_non_empty_raw "${PROJECT_DIR}/0001_reference/Raw"
 
-run_stage "0004 validation preprocessing" "0004_validation/Code_preprocessing"
-run_stage "0004 validation intermediate values" "0004_validation/Code_intermediate_values"
-run_stage "0004 validation template validation" "0004_validation/template_validation_bytes"
+run_stage "0001 reference" "0001_reference/Code_reference"
 
-log "COMPLETE: 0004 validation chain finished"
+log "COMPLETE: 0001 reference chain finished"

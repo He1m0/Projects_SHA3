@@ -141,7 +141,7 @@ for mode in hd hw id f9; do
       continue
     fi
     printf "  ${mode}_sigma${sig}: "
-    found=0
+    found=0  # reset per run — avoids stale value suppressing "NO valid level found"
     for level in 090 080 070 060 050 040 030 020 010; do
       zipf="$sb/0002_detection/Code_extract_ics/ics_original_${level}.zip"
       if [ ! -f "$zipf" ]; then continue; fi
@@ -182,6 +182,14 @@ fix_ics() {
     -e 's/SHA3_SASCA_TEMPLATE_TAG=.*/SHA3_SASCA_TEMPLATE_TAG=${level}/' \
     -e 's/SHA3_SASCA_ICS_TAG=.*/SHA3_SASCA_ICS_TAG=${level}/' \
     \"${sb}/.env\""
+  # Also update the deployed envs/ copy so re-runs via --env-file read the corrected level.
+  ssh IDP "sed -i \
+    -e 's/SHA3_TRAINING_ICS_LEVEL=.*/SHA3_TRAINING_ICS_LEVEL=${level}/' \
+    -e 's/SHA3_VALIDATION_TEMPLATE_TAG=.*/SHA3_VALIDATION_TEMPLATE_TAG=${level}/' \
+    -e 's/SHA3_VALIDATION_ICS_TAG=.*/SHA3_VALIDATION_ICS_TAG=${level}/' \
+    -e 's/SHA3_SASCA_TEMPLATE_TAG=.*/SHA3_SASCA_TEMPLATE_TAG=${level}/' \
+    -e 's/SHA3_SASCA_ICS_TAG=.*/SHA3_SASCA_ICS_TAG=${level}/' \
+    \"${sb}/pipeline_runner/envs/.env_paperscale_v3_${mode}_sigma${sigma_s}\" 2>/dev/null || true"
   # Also update local env file
   env_file="${ENVS_BASE}/sigma${sigma_s}/.env_paperscale_v3_${mode}_sigma${sigma_s}"
   sed -i \

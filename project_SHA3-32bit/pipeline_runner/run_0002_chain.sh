@@ -3,19 +3,22 @@
 set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-PROJECT_DIR="${SCRIPT_DIR}"
+PROJECT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 print_help() {
   cat <<'EOF'
 Usage:
-  sh run_0001_chain.sh
+  sh run_0002_chain.sh
 
 Description:
-  Runs the 0001 reference stage:
-    1) Code_reference  (produces ref_trace.npy)
+  Runs the full 0002 detection chain in order:
+    1) Code_preprocessing
+    2) Code_intermediate_values
+    3) Code_detection_R2
+    4) Code_extract_ics
 
 Assumption:
-  0001_reference/Raw already contains reference trace archives (*.zip).
+  0002_detection/Raw already contains detection trace archives (*.zip).
 EOF
 }
 
@@ -34,6 +37,7 @@ require_non_empty_raw() {
     echo "Error: Raw directory not found: ${RAW_DIR}" >&2
     exit 1
   fi
+
   ZIP_COUNT="$(find "${RAW_DIR}" -maxdepth 1 -type f -name '*.zip' | wc -l | tr -d ' ')"
   if [ "${ZIP_COUNT}" -eq 0 ]; then
     echo "Error: no .zip trace archives found in ${RAW_DIR}" >&2
@@ -56,8 +60,11 @@ run_stage() {
   log "DONE : ${LABEL}"
 }
 
-require_non_empty_raw "${PROJECT_DIR}/0001_reference/Raw"
+require_non_empty_raw "${PROJECT_DIR}/0002_detection/Raw"
 
-run_stage "0001 reference" "0001_reference/Code_reference"
+run_stage "0002 detection preprocessing" "0002_detection/Code_preprocessing"
+run_stage "0002 detection intermediate values" "0002_detection/Code_intermediate_values"
+run_stage "0002 detection R2" "0002_detection/Code_detection_R2"
+run_stage "0002 detection ICS extraction" "0002_detection/Code_extract_ics"
 
-log "COMPLETE: 0001 reference chain finished"
+log "COMPLETE: 0002 detection chain finished"

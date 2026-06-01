@@ -3,7 +3,7 @@
 set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-PROJECT_DIR="${SCRIPT_DIR}"
+PROJECT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 print_help() {
   cat <<'EOF'
@@ -61,6 +61,30 @@ run_stage() {
 }
 
 require_non_empty_raw "${PROJECT_DIR}/0003_training/Raw"
+
+# Validate ICS archive before training — prevents silent template corruption from empty arrays.
+# Sources .env to read SHA3_TRAINING_ICS_LEVEL and SHA3_DETECTION_* params.
+if [ -f "${PROJECT_DIR}/.env" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "${PROJECT_DIR}/.env"
+  set +a
+fi
+ICS_LEVEL_STR="$(printf '%03d' "$((10#${SHA3_TRAINING_ICS_LEVEL:-10}))")"
+ICS_ZIP="${PROJECT_DIR}/0002_detection/Code_extract_ics/ics_original_${ICS_LEVEL_STR}.zip"
+log "CHECK: validating training ICS archive (level=${ICS_LEVEL_STR})"
+if [ ! -f "${ICS_ZIP}" ]; then
+  echo "Error: ICS archive not found: ${ICS_ZIP}" >&2
+  echo "Hint: run check_ics_archive.py to find the highest valid level, then update SHA3_TRAINING_ICS_LEVEL." >&2
+  exit 1
+fi
+python3 "${SCRIPT_DIR}/check_ics_archive.py" \
+  --ics-zip "${ICS_ZIP}" \
+  --round-count "${SHA3_DETECTION_ROUNDS:-4}" \
+  --ab-words "${SHA3_DETECTION_ICS_WORDS_AB:-50}" \
+  --cd-words "${SHA3_DETECTION_ICS_WORDS_CD:-10}" \
+  --max-empty 0 \
+  --max-missing 0
 
 run_stage "0003 training preprocessing" "0003_training/Code_preprocessing"
 run_stage "0003 training intermediate values" "0003_training/Code_intermediate_values"

@@ -15,17 +15,17 @@ SIGMAS = [
 ICS_LEVELS = {
     "0p1": 90, "0p5": 90, "1p0": 90,
     "1p5": 90, "2p0": 90, "2p5": 90,
-    "3p0": 70,  # placeholder — verify after detection; paperscale may support higher
-    "3p5": 50,  # placeholder — verify after detection
-    "4p0": 40,  # placeholder — verify after detection
+    "3p0": 60,  # verified at paperscale (100 det sets) on 2026-05-31
+    "3p5": 40,  # verified at paperscale (100 det sets) on 2026-05-31
+    "4p0": 30,  # verified at paperscale (100 det sets) on 2026-05-31
 }
 
 ICS_NOTES = {
     "0p1": "", "0p5": "", "1p0": "",
     "1p5": "", "2p0": "", "2p5": "",
-    "3p0": "# NOTE: ICS level 70 is midscale-derived baseline. Verify with check_ics_archive.py before training.\n",
-    "3p5": "# NOTE: ICS level 50 is midscale-derived baseline. Verify with check_ics_archive.py before training.\n",
-    "4p0": "# NOTE: ICS level 40 is midscale-derived baseline. Verify with check_ics_archive.py before training.\n",
+    "3p0": "# ICS level 60: verified at paperscale (100 det sets) on 2026-05-31.\n",
+    "3p5": "# ICS level 40: verified at paperscale (100 det sets) on 2026-05-31.\n",
+    "4p0": "# ICS level 30: verified at paperscale (100 det sets) on 2026-05-31.\n",
 }
 
 MODES = {
