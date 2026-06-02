@@ -8,27 +8,50 @@ Log markers: `[MOVE : DN]` = detection done, `[MOVE : TR]` = training started,
 
 ---
 
-## Status snapshot — 2026-06-01 ~14:25
+## Status snapshot — 2026-06-02 ~09:10
 
 | Batch | # Runs | State | Notes |
 |-------|--------|-------|-------|
 | Midscale v1 (all σ) | 36 | **ARCHIVED** | All 36 archived locally under `runs_archive/midscale_v1/`; f9 σ=4.0 completed 2026-05-31 18:04, archived 2026-06-01 |
 | Smoke v3 ICS sweep | 36 | **ARCHIVED** | All 36 archived under `runs_archive/smoke_v3/` |
 | Smoke v4 SASCA re-run | 36 | **ARCHIVED** | All 36 archived under `runs_archive/smoke_v4/` |
-| Paperscale v3 σ=4.0 hd/hw | 2 | **SASCA running** | Rate scan ~trace 255/1000 (hd), ~584/1000 (hw); updated 14:18 |
+| Paperscale v3 σ=4.0 hd | 1 | **SASCA running** | Depths at traces 445/673/674; slowest (4R) 44.5%; ETA ~25h (~Jun 3 10:00) |
+| Paperscale v3 σ=4.0 hw | 1 | **SASCA running** | Trace 741/1000 (74.1%); ETA ~31h (~Jun 3 16:00) |
 | Paperscale v3 σ=4.0 id | 1 | **ARCHIVED** | COMPLETE 2026-06-01 08:58; archived locally |
-| Paperscale v3 σ=4.0 f9 | 1 | **SASCA running** | Rate scan ~trace 123/1000; fix log: `paperscale_v3_f9_sigma4p0.log`; ICS level=30 |
-| Paperscale v3 σ=3.5 hd/hw | 2 | **SASCA running** | Rate scan ~trace 277/1000 (hd), ~557/1000 (hw); updated 14:17 |
+| Paperscale v3 σ=4.0 f9 | 1 | **SASCA running** | fix run at trace 335/1000 (2R depth); ~9 tr/hr (same as sigma3p5); ETA ~Jun 5; fix log: `paperscale_v3_f9_sigma4p0.log`; ICS=30. Premature archive deleted (--status false-positive: detected 0004 COMPLETE, not full 0005). Re-archive with --force when done. |
+| Paperscale v3 σ=3.5 hd | 1 | **SASCA running** | Trace 707/1000 (70.7%); ETA ~13h (~Jun 2 22:00) |
+| Paperscale v3 σ=3.5 hw | 1 | **SASCA running** | Trace 715/1000 (71.5%); ETA ~34h (~Jun 3 19:00) |
 | Paperscale v3 σ=3.5 id | 1 | **ARCHIVED** | COMPLETE 2026-06-01 09:09; archived locally |
-| Paperscale v3 σ=3.5 f9 | 1 | **SASCA running** | Rate scan ~trace 123/1000; fix log: `paperscale_v3_f9_sigma3p5.log`; ICS level=40 |
-| Paperscale v3 σ=3.0 hd/hw | 2 | **SASCA running** | Rate scan ~trace 464/1000 (hd), ~513/1000 (hw); updated 14:17 |
+| Paperscale v3 σ=3.5 f9 | 1 | **SASCA running** | fix run at trace 335/1000 (33.5%); ~9 tr/hr; ETA ~74h (~Jun 5 11:00); fix log: `paperscale_v3_f9_sigma3p5.log`; ICS=40 |
+| Paperscale v3 σ=3.0 hd | 1 | **SASCA running** | Depths at traces 315/419/623; slowest (4R) 31.5%; long ETA (~Jun 5–6) |
+| Paperscale v3 σ=3.0 hw | 1 | **SASCA running** | Depths at traces 336/451/673; slowest (4R) 33.6%; long ETA (~Jun 6) |
 | Paperscale v3 σ=3.0 id | 1 | **ARCHIVED** | COMPLETE 2026-06-01 09:49; archived locally |
-| Paperscale v3 σ=3.0 f9 | 1 | **SASCA running** | Rate scan ~trace 139/1000; fix log: `paperscale_v3_f9_sigma3p0.log`; ICS level=60 |
-| Paperscale v3 σ=2.0–2.5 (all modes) | 8 | **R2 detection** | Preprocessing+intermediate values done (May31 19:21–23:57); in linear regression; R2=9, KeccakSim=1 |
-| Paperscale v3 σ=0.1–1.5 | 16 | **Queued — auto-relaunch** | Monitor waiting for in-flight ≤6 before launching sigma1p5 batch; local tmux: `paperscale_monitor` |
+| Paperscale v3 σ=3.0 f9 | 1 | **SASCA running** | fix run at trace 195/1000 (19.5%); ~3 tr/hr (ICS=60 heavy); ETA 10+ days; fix log: `paperscale_v3_f9_sigma3p0.log` |
+| Paperscale v3 σ=2.0–2.5 (all modes) | 8 | **R2 detection** | All 8 in linear regression as of 09:00 Jun 2; R2=8–9 (at cap); ETA ~1–2 more days |
+| Paperscale v3 σ=0.1–1.5 | 16 | **Queued — auto-relaunch** | Monitor stuck at R2=8 since midnight; waiting for ≤6 to launch sigma1p5; hd/hw/id 0p1–1p5 sims done (SIM:DN May31), f9 0p1–1p5 need sandboxes |
 | Reference (Cambridge) | 1 | **ARCHIVED** | `runs_archive/reference/2026-04-24_ref_original_paper/`; 50 PPC |
 
-**In-flight safety cap (2026-06-01):** `R2 + KeccakSim ≤ 6` before each 4-run batch launch guarantees peak R2 ≤ 10 (system limit). Monitor at `/tmp/paperscale_relaunch_monitor.sh`, log at `/tmp/paperscale_monitor.log`.
+**In-flight safety cap:** `R2 + KeccakSim ≤ 6` before each 4-run batch launch guarantees peak R2 ≤ 10 (system limit). Monitor at `/tmp/paperscale_relaunch_monitor.sh`, log at `/tmp/paperscale_monitor.log`.
+
+**Note on ETA estimates (2026-06-02):**
+- Rate observations: hd high-sigma runs ~22 tr/hr (few ICS samples); hw all sigma and hd sigma3p0 ~8 tr/hr; f9 sigma3p5 fix ~9 tr/hr; f9 sigma3p0 fix ~3 tr/hr (ICS=60).
+- 4R depth is always slowest and gates completion for multi-depth runs. Reported trace counts are the slowest depth unless labeled otherwise.
+- f9 sigma3p0 fix is the long-tail bottleneck for paperscale v3 completion.
+
+**ICS level rationale (clarified 2026-06-02):**
+The level numbering maps directly to the R² threshold: level N = r² > N/1000.
+Higher level = stricter threshold = FEWER ICS samples. The goal is the **highest** level
+that passes `check_ics_archive.py` (no empty arrays). Lower level → more samples → slower SASCA.
+
+| Scale | σ≤2.5 | σ=3.0 | σ=3.5 | σ=4.0 | Notes |
+|-------|-------|-------|-------|-------|-------|
+| Smoke v3 | 90 (all modes) | 90 (hd/hw/id), **70** (f9) | 90 (hd/hw/id), **60** (f9) | 90 (hd/hw/id), **50** (f9) | f9 bottleneck at smoke scale; env files fixed 2026-06-02 |
+| Midscale v1 | 90 | 70 (all modes) | 50 | 40 | f9 was bottleneck; others matched |
+| Paperscale v3 | 90 | **60** (all modes) | **40** | **30** | Single level per sigma = f9 bottleneck; hd/hw/id could support one step higher but id already archived at these levels — not restarted |
+
+Paperscale uses one level lower than midscale at high sigma because fresh paperscale traces yield
+slightly different R² boundaries. This is a minor cross-scale ICS discrepancy, not a design error.
+Within each scale, all 4 modes use the same level per sigma for consistency.
 
 **Log file note — ICS fix runs:** When `--fix-ics` is applied, the repair re-run logs to a separate file
 `pipeline_runner/paperscale_v3_{mode}_sigma{X}.log` (without `sandbox_` prefix) rather than appending
