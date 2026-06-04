@@ -14,7 +14,7 @@ if [ -f "$PROJ_DIR/.env" ]; then
   set +a
 fi
 
-TEMPLATE_TAG="$(printf '%03d' "${SHA3_VALIDATION_TEMPLATE_TAG:-10}")"
+TEMPLATE_TAG="$(printf '%03d' "$((10#${SHA3_VALIDATION_TEMPLATE_TAG:-10}))")"
 
 cd "$SCRIPT_DIR"
 
