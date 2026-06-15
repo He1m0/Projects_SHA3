@@ -1,31 +1,23 @@
 #!/usr/bin/env python3
-"""Generate paperscale v3 sigma sweep env files (36 total: 4 modes × 9 sigmas)."""
+"""Generate paperscale v4 sigma sweep env files (6 total: 2 modes × 3 sigmas).
+
+paperscale-v4 reruns the Iteration Scan for HW and HD at low sigma (0.1, 0.5, 1.0)
+with SHA3_SASCA_ITERATION_COUNT=200 instead of the 40 used in paperscale-v3.
+
+The TRACES_DIR intentionally points at the paperscale-v3 trace directories — the
+simulation data and trained templates are reused; only the Iteration Scan stages are
+re-executed with the higher iteration cap.
+"""
 import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 SIGMAS = [
     ("0p1", 0.1, 1), ("0p5", 0.5, 2), ("1p0", 1.0, 3),
-    ("1p5", 1.5, 4), ("2p0", 2.0, 5), ("2p5", 2.5, 6),
-    ("3p0", 3.0, 7), ("3p5", 3.5, 8), ("4p0", 4.0, 9),
 ]
 
-# Per-sigma ICS level: highest that passes check_ics_archive.py for all 4 modes.
-# σ≥3.0: midscale-derived baseline; MUST verify after detection before training.
 ICS_LEVELS = {
     "0p1": 90, "0p5": 90, "1p0": 90,
-    "1p5": 90, "2p0": 90, "2p5": 90,
-    "3p0": 60,  # verified at paperscale (100 det sets) on 2026-05-31
-    "3p5": 40,  # verified at paperscale (100 det sets) on 2026-05-31
-    "4p0": 30,  # verified at paperscale (100 det sets) on 2026-05-31
-}
-
-ICS_NOTES = {
-    "0p1": "", "0p5": "", "1p0": "",
-    "1p5": "", "2p0": "", "2p5": "",
-    "3p0": "# ICS level 60: verified at paperscale (100 det sets) on 2026-05-31.\n",
-    "3p5": "# ICS level 40: verified at paperscale (100 det sets) on 2026-05-31.\n",
-    "4p0": "# ICS level 30: verified at paperscale (100 det sets) on 2026-05-31.\n",
 }
 
 MODES = {
@@ -43,28 +35,14 @@ MODES = {
         "hd_add_scale": "0.0",
         "extra": "",
     },
-    "id": {
-        "desc": "identity mode",
-        "snr": "~5461",
-        "sim_mode": "id",
-        "hd_add_scale": "0.0",
-        "extra": "",
-    },
-    "f9": {
-        "desc": "pure F9 (unnormalized, bcs=1.0)",
-        "snr": "0.667",
-        "sim_mode": "f9",
-        "hd_add_scale": "0.0",
-        "extra": "SIM_F9_SEED=2839\nSIM_F9_C8_RANGE=0.5\n",
-    },
 }
 
 TEMPLATE = """\
-# KeccakSim_v2 — {mode_desc}, paperscale-v3 noise sweep: sigma={sigma_f}.
+# KeccakSim_v2 — {mode_desc}, paperscale-v4 noise sweep: sigma={sigma_f}.
 # SNR_var={snr}/sigma^2~{snr_val:.4g}.
-# Paperscale-v3: 10 ref, 100 det, 400 training, 40 validation sets, 1000 SASCA traces (SASCA iter=40).
-# Sweep step {step}/9.
-{ics_note}\
+# Paperscale-v4: rerun of Iteration Scan at 200 iters (was 40 in paperscale-v3).
+# Reuses paperscale-v3 traces and templates; only Iteration_Scan_*R stages are rerun.
+# Sweep step {step}/3.
 SHA3_INPUTS=16
 SHA3_INVOCATIONS=10
 
@@ -108,13 +86,14 @@ SHA3_SASCA_TRACE_COUNT=1000
 SHA3_SASCA_TEMPLATE_TAG={ics}
 SHA3_SASCA_ICS_TAG={ics}
 SHA3_SASCA_PPC=1
-SHA3_SASCA_ITERATION_COUNT=40
+SHA3_SASCA_ITERATION_COUNT=200
 SHA3_SASCA_RATE_BP_ITERATION_COUNT=200
 SHA3_SASCA_RATE_POINT_COUNT=201
 SHA3_SASCA_RATE_STEP_BITS=8
 SHA3_SASCA_ALLOWED_WRONG_BITS=0
 SHA3_SASCA_OUTPUT_BITS=512
 
+# Reuse paperscale-v3 traces (same simulation data, only Iteration Scan is rerun).
 TRACES_DIR=/storage/ge96pug/traces_paperscale_v3_{mode}_sigma{sigma_s}
 
 SIM_ALGORITHM=sha3-512
@@ -137,7 +116,6 @@ for sigma_s, sigma_f, step in SIGMAS:
     sigma_dir = os.path.join(SCRIPT_DIR, f"sigma{sigma_s}")
     os.makedirs(sigma_dir, exist_ok=True)
     ics = ICS_LEVELS[sigma_s]
-    ics_note = ICS_NOTES[sigma_s]
     for mode, m in MODES.items():
         snr_val = float(m["snr"].lstrip("~")) / sigma_f**2
         content = TEMPLATE.format(
@@ -146,7 +124,6 @@ for sigma_s, sigma_f, step in SIGMAS:
             snr=m["snr"],
             snr_val=snr_val,
             step=step,
-            ics_note=ics_note,
             ics=ics,
             mode=mode,
             sigma_s=sigma_s,
@@ -154,7 +131,7 @@ for sigma_s, sigma_f, step in SIGMAS:
             hd_add_scale=m["hd_add_scale"],
             extra_sim=m["extra"],
         )
-        fname = os.path.join(sigma_dir, f".env_paperscale_v3_{mode}_sigma{sigma_s}")
+        fname = os.path.join(sigma_dir, f".env_paperscale_v4_{mode}_sigma{sigma_s}")
         with open(fname, "w") as f:
             f.write(content)
         count += 1
