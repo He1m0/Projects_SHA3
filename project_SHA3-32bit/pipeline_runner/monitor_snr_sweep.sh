@@ -1,24 +1,23 @@
 #!/usr/bin/env sh
-# monitor_snr_sweep.sh
 #
 # Automated wave sequencer for smoke_v6 + paperscale_v5 SNR-equalized sweep.
-# Runs ON IDP in a tmux session. Creates sandboxes from a pre-deployed project
-# source and sequences all waves automatically.
+# Runs ON IDP in a tmux session. Creates sandboxes via setup_sandbox.sh and
+# sequences all waves automatically.
 #
-# Setup: run deploy_monitor.sh from local machine first to populate:
-#   /storage/ge96pug/Projects_SHA3_src/    — project source (rsynced)
-#   /storage/ge96pug/envs_smoke_v6/        — smoke_v6 env files
-#   /storage/ge96pug/envs_paperscale_v5/   — paperscale_v5 env files (sigma subdirs)
+# Setup: run deploy_monitor.sh from local machine first (git pull on IDP +
+# copies this script to /storage/ge96pug/monitor_snr_sweep.sh).
 #
 # Phase sequence:
 #   S:      launch smoke_v6 sanity (f9+id σ=0.1)
 #   Gate:   poll until ICS level 90 valid in both sanity sandboxes
-#   SR+A1:  launch smoke_v6 remaining (f9+id σ=0.5-4.0) + paperscale A1 (f9 σ=0.1/0.5/1.0)
-#   B1:     [R2 ≤ 6] paperscale B1 (id σ=0.1/0.5/1.0)
-#   A2:     [R2 ≤ 6] paperscale A2 (f9 σ=1.5/2.0/2.5)
-#   B2:     [R2 ≤ 6] paperscale B2 (id σ=1.5/2.0/2.5)
-#   A3:     [R2 ≤ 6] paperscale A3 (f9 σ=3.0/3.5/4.0)
-#   B3:     [R2 ≤ 6] paperscale B3 (id σ=3.0/3.5/4.0)
+#   SR+A1:  smoke_v6 remaining (f9+id σ=0.5-4.0, gated pairs) + paperscale A1 (f9 σ=0.1/0.5/1.0)
+#   B1:     [inflight ≤ R2_CAP] paperscale B1 (id σ=0.1/0.5/1.0)
+#   A2:     [inflight ≤ R2_CAP] paperscale A2 (f9 σ=1.5/2.0/2.5)
+#   B2:     [inflight ≤ R2_CAP] paperscale B2 (id σ=1.5/2.0/2.5)
+#   A3:     [inflight ≤ R2_CAP] paperscale A3 (f9 σ=3.0/3.5/4.0)
+#   B3:     [inflight ≤ R2_CAP] paperscale B3 (id σ=3.0/3.5/4.0)
+#
+# Inflight = R2 (detect_script) + KeccakSim processes combined.
 #
 # Usage:
 #   sh monitor_snr_sweep.sh [OPTIONS]
@@ -34,11 +33,9 @@ set -eu
 # ── configuration ─────────────────────────────────────────────────────────────
 
 STORAGE=/storage/ge96pug
-SRC="${STORAGE}/Projects_SHA3_src"
-ENVS_SMOKE="${STORAGE}/envs_smoke_v6"
-ENVS_PS5="${STORAGE}/envs_paperscale_v5"
+REPO_SRC="${STORAGE}/Projects_SHA3"
 
-R2_CAP=6
+INFLIGHT_CAP=6
 POLL_INTERVAL=300
 ICS_POLL=120
 
@@ -75,22 +72,29 @@ log() {
 
 count_procs() { pgrep -f "$1" 2>/dev/null | wc -l | tr -d ' '; }
 
-get_r2_count() { count_procs detect_script; }
+get_inflight() {
+  r2=$(count_procs detect_script)
+  sim=$(count_procs KeccakSim)
+  echo $((r2 + sim))
+}
 
-wait_for_r2_capacity() {
+wait_for_capacity() {
   label="$1"
   if [ "${DRY_RUN}" -eq 1 ]; then
-    r2=$(get_r2_count)
-    log "[DRY-RUN] Would wait R2 ≤ ${R2_CAP} before: ${label} (currently ${r2})"
+    r2=$(count_procs detect_script)
+    sim=$(count_procs KeccakSim)
+    inflight=$((r2 + sim))
+    log "[DRY-RUN] Would wait inflight ≤ ${INFLIGHT_CAP} before: ${label} (currently R2=${r2} KeccakSim=${sim} inflight=${inflight})"
     return 0
   fi
-  log "Waiting for R2 ≤ ${R2_CAP} before: ${label}"
+  log "Waiting for inflight ≤ ${INFLIGHT_CAP} before: ${label}"
   while true; do
-    r2=$(get_r2_count)
+    r2=$(count_procs detect_script)
     sim=$(count_procs KeccakSim)
-    log "  R2=${r2}  KeccakSim=${sim}"
-    if [ "${r2}" -le "${R2_CAP}" ]; then
-      log "Capacity OK (R2=${r2}). Proceeding: ${label}"
+    inflight=$((r2 + sim))
+    log "  R2=${r2}  KeccakSim=${sim}  inflight=${inflight}"
+    if [ "${inflight}" -le "${INFLIGHT_CAP}" ]; then
+      log "Capacity OK (inflight=${inflight}). Proceeding: ${label}"
       return 0
     fi
     sleep "${POLL_INTERVAL}"
@@ -134,21 +138,18 @@ launch_run() {
   mode="$1"; sigma="$2"; version="$3"
 
   if [ "${version}" = "smoke_v6" ]; then
-    env_src="${ENVS_SMOKE}/.env_smoke_v6_${mode}_sigma${sigma}"
-    sandbox="${STORAGE}/Projects_SHA3_sandbox_smoke_v6_${mode}_sigma${sigma}"
-    traces_dir="${STORAGE}/traces_smoke_v6_${mode}_sigma${sigma}"
+    env_src="${REPO_SRC}/project_SHA3-32bit/pipeline_runner/envs/smoke_v6_sigma_sweep/.env_smoke_v6_${mode}_sigma${sigma}"
     env_name="smoke_v6_${mode}_sigma${sigma}"
   else
-    env_src="${ENVS_PS5}/sigma${sigma}/.env_paperscale_v5_${mode}_sigma${sigma}"
-    sandbox="${STORAGE}/Projects_SHA3_sandbox_paperscale_v5_${mode}_sigma${sigma}"
-    traces_dir="${STORAGE}/traces_paperscale_v5_${mode}_sigma${sigma}"
+    env_src="${REPO_SRC}/project_SHA3-32bit/pipeline_runner/envs/paperscale_v5_sigma_sweep/sigma${sigma}/.env_paperscale_v5_${mode}_sigma${sigma}"
     env_name="paperscale_v5_${mode}_sigma${sigma}"
   fi
 
   label="sandbox_${env_name}"
-  proj="${sandbox}/project_SHA3-32bit"
-  env_dest="${proj}/pipeline_runner/envs/.env_${env_name}"
-  log_file="${proj}/pipeline_runner/${label}.log"
+  sandbox="${STORAGE}/Projects_SHA3_sandbox_${env_name}"
+  traces_dir="${STORAGE}/traces_${env_name}"
+  env_dest="${sandbox}/project_SHA3-32bit/pipeline_runner/envs/.env_${env_name}"
+  log_file="${sandbox}/project_SHA3-32bit/pipeline_runner/${label}.log"
 
   if [ "${DRY_RUN}" -eq 1 ]; then
     log "[DRY-RUN] launch_run: ${env_name}"
@@ -159,13 +160,17 @@ launch_run() {
   fi
 
   log "Setting up sandbox: ${label}"
-  mkdir -p "${sandbox}"
-  rsync -a --delete "${SRC}/" "${proj}/"
-  mkdir -p "${traces_dir}"
-  mkdir -p "$(dirname "${env_dest}")"
+  sh "${REPO_SRC}/project_SHA3-32bit/pipeline_runner/setup_sandbox.sh" \
+    --label "${env_name}" \
+    --base-dir "${STORAGE}" \
+    --repo-src "${REPO_SRC}" \
+    --with-traces \
+    --force
+
+  mkdir -p "${sandbox}/project_SHA3-32bit/pipeline_runner/envs"
   cp "${env_src}" "${env_dest}"
 
-  inner_cmd="cd '${proj}/pipeline_runner' && export TRACES_DIR='${traces_dir}' && sh run_full_pipeline.sh --env-file 'envs/.env_${env_name}'"
+  inner_cmd="cd '${sandbox}/project_SHA3-32bit/pipeline_runner' && export TRACES_DIR='${traces_dir}' && sh run_full_pipeline.sh --env-file 'envs/.env_${env_name}'"
   tmux kill-session -t "${label}" 2>/dev/null || true
   tmux new-session -d -s "${label}" sh -lc "${inner_cmd}"
   i=0
@@ -179,8 +184,8 @@ launch_run() {
 launch_ps5_wave() {
   wave_label="$1"; mode="$2"; s1="$3"; s2="$4"; s3="$5"
   log "=== Paperscale v5 wave ${wave_label}: ${mode} σ=${s1}/${s2}/${s3} ==="
-  r2=$(get_r2_count)
-  log "  R2 before launch: ${r2}"
+  r2=$(count_procs detect_script); sim=$(count_procs KeccakSim)
+  log "  inflight before launch: R2=${r2} KeccakSim=${sim}"
   launch_run "${mode}" "${s1}" paperscale_v5
   launch_run "${mode}" "${s2}" paperscale_v5
   launch_run "${mode}" "${s3}" paperscale_v5
@@ -195,8 +200,9 @@ phase_s() {
 }
 
 phase_sr() {
-  log "=== Phase SR: smoke_v6 remaining (f9+id σ=0.5..4.0, 16 runs) ==="
+  log "=== Phase SR: smoke_v6 remaining (f9+id σ=0.5..4.0, gated pairs) ==="
   for sig in 0p5 1p0 1p5 2p0 2p5 3p0 3p5 4p0; do
+    wait_for_capacity "SR smoke f9+id σ=${sig}"
     launch_run f9 "${sig}" smoke_v6
     launch_run id "${sig}" smoke_v6
   done
@@ -207,27 +213,27 @@ phase_a1() {
 }
 
 phase_b1() {
-  wait_for_r2_capacity "B1 id σ=0.1/0.5/1.0"
+  wait_for_capacity "B1 id σ=0.1/0.5/1.0"
   launch_ps5_wave B1 id 0p1 0p5 1p0
 }
 
 phase_a2() {
-  wait_for_r2_capacity "A2 f9 σ=1.5/2.0/2.5"
+  wait_for_capacity "A2 f9 σ=1.5/2.0/2.5"
   launch_ps5_wave A2 f9 1p5 2p0 2p5
 }
 
 phase_b2() {
-  wait_for_r2_capacity "B2 id σ=1.5/2.0/2.5"
+  wait_for_capacity "B2 id σ=1.5/2.0/2.5"
   launch_ps5_wave B2 id 1p5 2p0 2p5
 }
 
 phase_a3() {
-  wait_for_r2_capacity "A3 f9 σ=3.0/3.5/4.0"
+  wait_for_capacity "A3 f9 σ=3.0/3.5/4.0"
   launch_ps5_wave A3 f9 3p0 3p5 4p0
 }
 
 phase_b3() {
-  wait_for_r2_capacity "B3 id σ=3.0/3.5/4.0"
+  wait_for_capacity "B3 id σ=3.0/3.5/4.0"
   launch_ps5_wave B3 id 3p0 3p5 4p0
 }
 
@@ -235,13 +241,16 @@ phase_b3() {
 
 preflight_check() {
   if [ "${DRY_RUN}" -eq 0 ]; then
-    for d in "${SRC}" "${ENVS_SMOKE}" "${ENVS_PS5}"; do
-      if [ ! -d "${d}" ]; then
-        echo "ERROR: Required directory not found: ${d}" >&2
-        echo "Run deploy_monitor.sh from local machine first." >&2
-        exit 1
-      fi
-    done
+    if [ ! -d "${REPO_SRC}" ]; then
+      echo "ERROR: REPO_SRC not found: ${REPO_SRC}" >&2
+      echo "Run deploy_monitor.sh from local machine first." >&2
+      exit 1
+    fi
+    if [ ! -f "${REPO_SRC}/KeccakSim_v2.py" ]; then
+      echo "ERROR: KeccakSim_v2.py not found at ${REPO_SRC}/KeccakSim_v2.py" >&2
+      echo "Make sure IDP has the repo cloned at ${REPO_SRC}." >&2
+      exit 1
+    fi
   fi
 }
 
@@ -250,10 +259,11 @@ preflight_check() {
 preflight_check
 
 log "=== SNR-equalized sweep monitor ==="
-[ "${DRY_RUN}"   -eq 1 ] && log "*** DRY-RUN MODE — no launches ***"
+[ "${DRY_RUN}"    -eq 1 ] && log "*** DRY-RUN MODE — no launches ***"
 [ "${SKIP_SMOKE}" -eq 1 ] && log "*** --skip-smoke: skipping Phase S + ICS gate + SR ***"
 [ -n "${START_WAVE}" ]    && log "*** --start-wave ${START_WAVE} ***"
-log "R2_CAP=${R2_CAP}  POLL=${POLL_INTERVAL}s  ICS_POLL=${ICS_POLL}s"
+log "INFLIGHT_CAP=${INFLIGHT_CAP}  POLL=${POLL_INTERVAL}s  ICS_POLL=${ICS_POLL}s"
+log "REPO_SRC=${REPO_SRC}"
 log "Log: ${LOG}"
 
 if [ "${SKIP_SMOKE}" -eq 0 ]; then
