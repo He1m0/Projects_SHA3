@@ -261,6 +261,11 @@ if [ "${SKIP_SMOKE}" -eq 0 ]; then
   wait_for_ics_gate
   phase_sr
   phase_a1
+  phase_b1
+  phase_a2
+  phase_b2
+  phase_a3
+  phase_b3
 else
   # Run paperscale waves from START_WAVE onwards (default A1 = all waves).
   START="${START_WAVE:-A1}"
