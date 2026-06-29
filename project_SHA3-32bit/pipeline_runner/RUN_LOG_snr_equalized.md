@@ -29,9 +29,11 @@ F9/ID had lower SNR — now fixed).
 - [x] launch_paperscale_v5.sh written and tested (--dry-run, waves A1–A3/B1–B3)
 - [x] Stale v4iter_* tmux sessions killed (6 sessions)
 - [x] IDP disk cleanup (paperscale_v3 + smoke_v5 + older remnants)
-- [ ] Smoke_v6 sanity run (f9+id σ=0.1)
-- [ ] ICS level 90 confirmed viable for SNR-equalized F9+ID
-- [ ] Paperscale_v5 full sweep launched
+- [x] monitor_snr_sweep.sh + deploy_monitor.sh written, deployed, monitor started
+- [x] Smoke_v6 sanity run (f9+id σ=0.1) — launched 2026-06-29 22:27
+- [x] ICS level 90 confirmed viable — PASSED immediately for both f9+id σ=0.1
+- [x] Smoke_v6 remaining (16 runs) + Paperscale_v5 wave A1 — auto-launched by monitor
+- [ ] Paperscale_v5 full sweep complete
 
 ---
 
@@ -51,35 +53,39 @@ Freed ~2.6 TB: 42 paperscale_v3 dirs + 36 smoke_v5 dirs + 16 smoke_v3/v4+orphan 
 
 ## smoke_v6 — sanity check runs
 
-| Mode | σ   | Launched | ICS OK? | DONE | Archived |
-|------|-----|----------|---------|------|----------|
-| f9   | 0.1 |          |         |      |          |
-| id   | 0.1 |          |         |      |          |
+| Mode | σ   | Launched        | ICS OK? | DONE | Archived |
+|------|-----|-----------------|---------|------|----------|
+| f9   | 0.1 | 2026-06-29 22:28 | ✓ level 90 |      |          |
+| id   | 0.1 | 2026-06-29 22:28 | ✓ level 90 |      |          |
 
 **Gate condition before paperscale_v5:** ICS level 90 non-empty for both sanity runs.
+**Result: PASSED** — ICS zip present and validated immediately. Monitor auto-proceeded to SR+A1.
 
 ### smoke_v6 full sweep
 
-| Mode | σ   | Launched | DONE | Archived |
-|------|-----|----------|------|----------|
-| f9   | 0.1 |          |      |          |
-| f9   | 0.5 |          |      |          |
-| f9   | 1.0 |          |      |          |
-| f9   | 1.5 |          |      |          |
-| f9   | 2.0 |          |      |          |
-| f9   | 2.5 |          |      |          |
-| f9   | 3.0 |          |      |          |
-| f9   | 3.5 |          |      |          |
-| f9   | 4.0 |          |      |          |
-| id   | 0.1 |          |      |          |
-| id   | 0.5 |          |      |          |
-| id   | 1.0 |          |      |          |
-| id   | 1.5 |          |      |          |
-| id   | 2.0 |          |      |          |
-| id   | 2.5 |          |      |          |
-| id   | 3.0 |          |      |          |
-| id   | 3.5 |          |      |          |
-| id   | 4.0 |          |      |          |
+All 18 runs launched by monitor (Phase S + SR). Monitor: `snr_monitor` tmux on IDP.
+Monitor log: `/storage/ge96pug/monitor_snr_sweep_20260629_222748.log`
+
+| Mode | σ   | Launched        | DONE | Archived |
+|------|-----|-----------------|------|----------|
+| f9   | 0.1 | 2026-06-29 22:28 |      |          |
+| f9   | 0.5 | 2026-06-29 ~22:29 |    |          |
+| f9   | 1.0 | 2026-06-29 ~22:30 |    |          |
+| f9   | 1.5 | 2026-06-29 ~22:30 |    |          |
+| f9   | 2.0 | 2026-06-29 ~22:31 |    |          |
+| f9   | 2.5 | 2026-06-29 ~22:31 |    |          |
+| f9   | 3.0 | 2026-06-29 ~22:32 |    |          |
+| f9   | 3.5 | 2026-06-29 ~22:32 |    |          |
+| f9   | 4.0 | 2026-06-29 ~22:33 |    |          |
+| id   | 0.1 | 2026-06-29 22:28 |      |          |
+| id   | 0.5 | 2026-06-29 ~22:29 |    |          |
+| id   | 1.0 | 2026-06-29 ~22:30 |    |          |
+| id   | 1.5 | 2026-06-29 ~22:30 |    |          |
+| id   | 2.0 | 2026-06-29 ~22:31 |    |          |
+| id   | 2.5 | 2026-06-29 ~22:31 |    |          |
+| id   | 3.0 | 2026-06-29 ~22:32 |    |          |
+| id   | 3.5 | 2026-06-29 ~22:32 |    |          |
+| id   | 4.0 | 2026-06-29 ~22:33 |    |          |
 
 ---
 
@@ -90,11 +96,13 @@ Trace counts: 100 det, 400 training, 40 val, 1000 SASCA.
 
 ### Wave status
 
-| Wave | Mode | σ         | Launched | R2 peak | SASCA | DONE | Archived |
-|------|------|-----------|----------|---------|-------|------|----------|
-| A1   | f9   | 0.1       |          |         |       |      |          |
-| A1   | f9   | 0.5       |          |         |       |      |          |
-| A1   | f9   | 1.0       |          |         |       |      |          |
+Waves launched by `snr_monitor` tmux session on IDP. Monitor gates R2 ≤ 6 between waves.
+
+| Wave | Mode | σ         | Launched        | R2 peak | SASCA | DONE | Archived |
+|------|------|-----------|-----------------|---------|-------|------|----------|
+| A1   | f9   | 0.1       | 2026-06-29 ~22:33 |       |       |      |          |
+| A1   | f9   | 0.5       | 2026-06-29 ~22:33 |       |       |      |          |
+| A1   | f9   | 1.0       | 2026-06-29 ~22:34 |       |       |      |          |
 | B1   | id   | 0.1       |          |         |       |      |          |
 | B1   | id   | 0.5       |          |         |       |      |          |
 | B1   | id   | 1.0       |          |         |       |      |          |
