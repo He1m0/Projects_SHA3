@@ -34,6 +34,9 @@ F9/ID had lower SNR — now fixed).
 - [x] ICS level 90 confirmed viable — PASSED immediately for both f9+id σ=0.1
 - [x] Smoke_v6 remaining (16 runs) + Paperscale_v5 wave A1 — auto-launched by monitor
 - [x] Monitor bug fixed (B1-B3 missing in main path); restarted --start-wave B1 at 22:40
+- [x] Three deeper bugs fixed (KeccakSim path, R2-only gate, smoke batching); committed b8b4db7
+- [x] Race condition on restart fixed: cleanup must complete before monitor starts
+- [x] Monitor restarted clean at 00:36 (2026-06-30); ICS gate polling
 - [ ] Paperscale_v5 full sweep complete
 
 ---
@@ -56,21 +59,21 @@ Freed ~2.6 TB: 42 paperscale_v3 dirs + 36 smoke_v5 dirs + 16 smoke_v3/v4+orphan 
 
 | Mode | σ   | Launched        | ICS OK? | DONE | Archived |
 |------|-----|-----------------|---------|------|----------|
-| f9   | 0.1 | 2026-06-29 22:28 | ✓ level 90 |      |          |
-| id   | 0.1 | 2026-06-29 22:28 | ✓ level 90 |      |          |
+| f9   | 0.1 | 2026-06-30 00:36 | pending    |      |          |
+| id   | 0.1 | 2026-06-30 00:36 | pending    |      |          |
 
 **Gate condition before paperscale_v5:** ICS level 90 non-empty for both sanity runs.
-**Result: PASSED** — ICS zip present and validated immediately. Monitor auto-proceeded to SR+A1.
+**Result: Pending** — ICS gate polling as of 00:36. Previous attempts (22:28, 23:35) failed due to monitor bugs and cleanup race condition.
 
 ### smoke_v6 full sweep
 
-All 18 runs launched by monitor (Phase S + SR). Monitor: `snr_monitor` tmux on IDP.
-Monitor log: `/storage/ge96pug/monitor_snr_sweep_20260629_222748.log`
+All 18 runs to be launched by monitor (Phase S + SR). Monitor: `snr_monitor` tmux on IDP.
+Active monitor log: `/storage/ge96pug/monitor_snr_sweep_20260630_003610.log`
 
 | Mode | σ   | Launched        | DONE | Archived |
 |------|-----|-----------------|------|----------|
-| f9   | 0.1 | 2026-06-29 22:28 |      |          |
-| f9   | 0.5 | 2026-06-29 ~22:29 |    |          |
+| f9   | 0.1 | 2026-06-30 00:36  |      |          |
+| f9   | 0.5 | pending           |      |          |
 | f9   | 1.0 | 2026-06-29 ~22:30 |    |          |
 | f9   | 1.5 | 2026-06-29 ~22:30 |    |          |
 | f9   | 2.0 | 2026-06-29 ~22:31 |    |          |
@@ -78,8 +81,8 @@ Monitor log: `/storage/ge96pug/monitor_snr_sweep_20260629_222748.log`
 | f9   | 3.0 | 2026-06-29 ~22:32 |    |          |
 | f9   | 3.5 | 2026-06-29 ~22:32 |    |          |
 | f9   | 4.0 | 2026-06-29 ~22:33 |    |          |
-| id   | 0.1 | 2026-06-29 22:28 |      |          |
-| id   | 0.5 | 2026-06-29 ~22:29 |    |          |
+| id   | 0.1 | 2026-06-30 00:36  |      |          |
+| id   | 0.5 | pending           |      |          |
 | id   | 1.0 | 2026-06-29 ~22:30 |    |          |
 | id   | 1.5 | 2026-06-29 ~22:30 |    |          |
 | id   | 2.0 | 2026-06-29 ~22:31 |    |          |
@@ -101,16 +104,13 @@ Waves launched by `snr_monitor` tmux session on IDP. Monitor gates R2 ≤ 6 betw
 
 | Wave | Mode | σ         | Launched          | R2 peak | SASCA | DONE | Archived |
 |------|------|-----------|-------------------|---------|-------|------|----------|
-| A1   | f9   | 0.1       | 2026-06-29 ~22:34 |         |       |      |          |
-| A1   | f9   | 0.5       | 2026-06-29 ~22:34 |         |       |      |          |
-| A1   | f9   | 1.0       | 2026-06-29 ~22:35 |         |       |      |          |
-| B1   | id   | 0.1       | 2026-06-29 22:41  |         |       |      |          |
-| B1   | id   | 0.5       | 2026-06-29 ~22:41 |         |       |      |          |
-| B1   | id   | 1.0       | 2026-06-29 ~22:42 |         |       |      |          |
-| B1   | id   | 0.1       |          |         |       |      |          |
-| B1   | id   | 0.5       |          |         |       |      |          |
-| B1   | id   | 1.0       |          |         |       |      |          |
-| A2   | f9   | 1.5       |          |         |       |      |          |
+| A1   | f9   | 0.1       | pending           |         |       |      |          |
+| A1   | f9   | 0.5       | pending           |         |       |      |          |
+| A1   | f9   | 1.0       | pending           |         |       |      |          |
+| B1   | id   | 0.1       | pending           |         |       |      |          |
+| B1   | id   | 0.5       | pending           |         |       |      |          |
+| B1   | id   | 1.0       | pending           |         |       |      |          |
+| A2   | f9   | 1.5       | pending           |         |       |      |          |
 | A2   | f9   | 2.0       |          |         |       |      |          |
 | A2   | f9   | 2.5       |          |         |       |      |          |
 | B2   | id   | 1.5       |          |         |       |      |          |
