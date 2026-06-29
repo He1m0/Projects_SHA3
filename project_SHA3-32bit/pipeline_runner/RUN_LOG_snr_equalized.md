@@ -33,6 +33,7 @@ F9/ID had lower SNR — now fixed).
 - [x] Smoke_v6 sanity run (f9+id σ=0.1) — launched 2026-06-29 22:27
 - [x] ICS level 90 confirmed viable — PASSED immediately for both f9+id σ=0.1
 - [x] Smoke_v6 remaining (16 runs) + Paperscale_v5 wave A1 — auto-launched by monitor
+- [x] Monitor bug fixed (B1-B3 missing in main path); restarted --start-wave B1 at 22:40
 - [ ] Paperscale_v5 full sweep complete
 
 ---
@@ -98,11 +99,14 @@ Trace counts: 100 det, 400 training, 40 val, 1000 SASCA.
 
 Waves launched by `snr_monitor` tmux session on IDP. Monitor gates R2 ≤ 6 between waves.
 
-| Wave | Mode | σ         | Launched        | R2 peak | SASCA | DONE | Archived |
-|------|------|-----------|-----------------|---------|-------|------|----------|
-| A1   | f9   | 0.1       | 2026-06-29 ~22:33 |       |       |      |          |
-| A1   | f9   | 0.5       | 2026-06-29 ~22:33 |       |       |      |          |
-| A1   | f9   | 1.0       | 2026-06-29 ~22:34 |       |       |      |          |
+| Wave | Mode | σ         | Launched          | R2 peak | SASCA | DONE | Archived |
+|------|------|-----------|-------------------|---------|-------|------|----------|
+| A1   | f9   | 0.1       | 2026-06-29 ~22:34 |         |       |      |          |
+| A1   | f9   | 0.5       | 2026-06-29 ~22:34 |         |       |      |          |
+| A1   | f9   | 1.0       | 2026-06-29 ~22:35 |         |       |      |          |
+| B1   | id   | 0.1       | 2026-06-29 22:41  |         |       |      |          |
+| B1   | id   | 0.5       | 2026-06-29 ~22:41 |         |       |      |          |
+| B1   | id   | 1.0       | 2026-06-29 ~22:42 |         |       |      |          |
 | B1   | id   | 0.1       |          |         |       |      |          |
 | B1   | id   | 0.5       |          |         |       |      |          |
 | B1   | id   | 1.0       |          |         |       |      |          |
