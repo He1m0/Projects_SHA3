@@ -46,10 +46,36 @@ class Scatter_Model:
     print('Finished', time.asctime())
     return np.array(Scores)
 
+def _valid_result(fname):
+  # np.save is not atomic — a killed/crashed process can leave a file that
+  # exists but is truncated or corrupt. Load it and check shape rather than
+  # trusting existence, or a partial write would be silently treated as a
+  # finished group forever.
+  if not os.path.exists(fname):
+    return False
+  try:
+    return np.load(fname).shape == (OUTSIZE,)
+  except Exception:
+    return False
+
+def _group_done(TAG, ints):
+  outname = './detect_results_32/'+TAG+'_r_squ_i'+str(ints).zfill(3)+'.npy'
+  if not _valid_result(outname):
+    return False
+  for bt in range(0, 4):
+    byte = ints*4+bt
+    fname = './detect_results_08/'+TAG+'_r_squ_b'+str(byte).zfill(3)+'.npy'
+    if not _valid_result(fname):
+      return False
+  return True
+
 def detect(MODEL, TAG, lower, upper):
   for ints in range(lower, upper):
-    tS = time.time()
     NAME_TAG = TAG+'_i'+str(ints).zfill(3)
+    if _group_done(TAG, ints):
+      print('Skipping '+NAME_TAG+' (already computed)', time.asctime())
+      continue
+    tS = time.time()
     intermediate_bits = []
     for byte in range(4*ints, 4*ints+4):
       BYTE_TAG = TAG+'_b'+str(byte).zfill(3)

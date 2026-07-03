@@ -17,7 +17,18 @@
 #   A3:     [inflight ≤ R2_CAP] paperscale A3 (f9 σ=3.0/3.5/4.0)
 #   B3:     [inflight ≤ R2_CAP] paperscale B3 (id σ=3.0/3.5/4.0)
 #
-# Inflight = R2 (detect_script) + KeccakSim processes combined.
+# R2 (detect_script) and KeccakSim (simulation) are gated separately, each
+# polled continuously before every individual run launch — not just once per
+# 3-run wave — because runs converge on R2 at roughly the same time regardless
+# of staggered launch order (simulation/preprocessing take similar wall-clock
+# time for every run in a sweep). A once-per-wave snapshot check reads
+# "capacity OK" right before a wave launches, then all of that wave's (and
+# prior waves') runs pile onto R2 simultaneously once they each reach it.
+# This exact failure mode is documented in RUN_LOG.md:951-952 (previous sweep:
+# "simulation stagger is NOT a safe assumption ... all runs hit R2
+# simultaneously") and recurred in the 2026-06-30 paperscale_v5 launch (18
+# concurrent R2 processes vs the documented safe cap of 10, RUN_LOG.md:947-993,
+# derived after a real OOM crash on paperscale_v2 at 28 concurrent processes).
 #
 # Usage:
 #   sh monitor_snr_sweep.sh [OPTIONS]
@@ -35,7 +46,11 @@ set -eu
 STORAGE=/storage/ge96pug
 REPO_SRC="${STORAGE}/Projects_SHA3"
 
-INFLIGHT_CAP=6
+# Gated independently: R2 is RAM-bound (~33 GB commit/process, CommitLimit
+# ~511 GB → safe cap 10, see launch_paperscale_v5.sh:9); KeccakSim is
+# disk-write-bandwidth-bound (safe cap 3, launch_paperscale_v5.sh:8).
+R2_CAP=10
+SIM_CAP=3
 POLL_INTERVAL=300
 ICS_POLL=120
 
@@ -72,29 +87,25 @@ log() {
 
 count_procs() { pgrep -f "$1" 2>/dev/null | wc -l | tr -d ' '; }
 
-get_inflight() {
-  r2=$(count_procs detect_script)
-  sim=$(count_procs KeccakSim)
-  echo $((r2 + sim))
-}
-
+# Blocks until BOTH R2 and KeccakSim process counts are within their
+# independent caps. Called before every individual run launch (not just once
+# per wave) so a run that only clears capacity partway through a wave is
+# still caught — see the module header comment for why this matters.
 wait_for_capacity() {
   label="$1"
   if [ "${DRY_RUN}" -eq 1 ]; then
     r2=$(count_procs detect_script)
     sim=$(count_procs KeccakSim)
-    inflight=$((r2 + sim))
-    log "[DRY-RUN] Would wait inflight ≤ ${INFLIGHT_CAP} before: ${label} (currently R2=${r2} KeccakSim=${sim} inflight=${inflight})"
+    log "[DRY-RUN] Would wait R2 ≤ ${R2_CAP} and KeccakSim ≤ ${SIM_CAP} before: ${label} (currently R2=${r2} KeccakSim=${sim})"
     return 0
   fi
-  log "Waiting for inflight ≤ ${INFLIGHT_CAP} before: ${label}"
+  log "Waiting for R2 ≤ ${R2_CAP} and KeccakSim ≤ ${SIM_CAP} before: ${label}"
   while true; do
     r2=$(count_procs detect_script)
     sim=$(count_procs KeccakSim)
-    inflight=$((r2 + sim))
-    log "  R2=${r2}  KeccakSim=${sim}  inflight=${inflight}"
-    if [ "${inflight}" -le "${INFLIGHT_CAP}" ]; then
-      log "Capacity OK (inflight=${inflight}). Proceeding: ${label}"
+    log "  R2=${r2} (cap ${R2_CAP})  KeccakSim=${sim} (cap ${SIM_CAP})"
+    if [ "${r2}" -le "${R2_CAP}" ] && [ "${sim}" -le "${SIM_CAP}" ]; then
+      log "Capacity OK (R2=${r2} KeccakSim=${sim}). Proceeding: ${label}"
       return 0
     fi
     sleep "${POLL_INTERVAL}"
@@ -184,10 +195,13 @@ launch_run() {
 launch_ps5_wave() {
   wave_label="$1"; mode="$2"; s1="$3"; s2="$4"; s3="$5"
   log "=== Paperscale v5 wave ${wave_label}: ${mode} σ=${s1}/${s2}/${s3} ==="
-  r2=$(count_procs detect_script); sim=$(count_procs KeccakSim)
-  log "  inflight before launch: R2=${r2} KeccakSim=${sim}"
+  # Gate before EACH run, not just once for the wave — a run further into the
+  # wave may need to wait even if the first one didn't (see header comment).
+  wait_for_capacity "${wave_label} ${mode} σ=${s1}"
   launch_run "${mode}" "${s1}" paperscale_v5
+  wait_for_capacity "${wave_label} ${mode} σ=${s2}"
   launch_run "${mode}" "${s2}" paperscale_v5
+  wait_for_capacity "${wave_label} ${mode} σ=${s3}"
   launch_run "${mode}" "${s3}" paperscale_v5
 }
 
@@ -213,27 +227,22 @@ phase_a1() {
 }
 
 phase_b1() {
-  wait_for_capacity "B1 id σ=0.1/0.5/1.0"
   launch_ps5_wave B1 id 0p1 0p5 1p0
 }
 
 phase_a2() {
-  wait_for_capacity "A2 f9 σ=1.5/2.0/2.5"
   launch_ps5_wave A2 f9 1p5 2p0 2p5
 }
 
 phase_b2() {
-  wait_for_capacity "B2 id σ=1.5/2.0/2.5"
   launch_ps5_wave B2 id 1p5 2p0 2p5
 }
 
 phase_a3() {
-  wait_for_capacity "A3 f9 σ=3.0/3.5/4.0"
   launch_ps5_wave A3 f9 3p0 3p5 4p0
 }
 
 phase_b3() {
-  wait_for_capacity "B3 id σ=3.0/3.5/4.0"
   launch_ps5_wave B3 id 3p0 3p5 4p0
 }
 
@@ -262,7 +271,7 @@ log "=== SNR-equalized sweep monitor ==="
 [ "${DRY_RUN}"    -eq 1 ] && log "*** DRY-RUN MODE — no launches ***"
 [ "${SKIP_SMOKE}" -eq 1 ] && log "*** --skip-smoke: skipping Phase S + ICS gate + SR ***"
 [ -n "${START_WAVE}" ]    && log "*** --start-wave ${START_WAVE} ***"
-log "INFLIGHT_CAP=${INFLIGHT_CAP}  POLL=${POLL_INTERVAL}s  ICS_POLL=${ICS_POLL}s"
+log "R2_CAP=${R2_CAP}  SIM_CAP=${SIM_CAP}  POLL=${POLL_INTERVAL}s  ICS_POLL=${ICS_POLL}s"
 log "REPO_SRC=${REPO_SRC}"
 log "Log: ${LOG}"
 
