@@ -21,3 +21,4 @@ project_SHA3-32bit/0004_validation/template_validation_bytes/quality_report
 .vscode
 .aider*
 student_thesis/
+RUN_LOG*.md
