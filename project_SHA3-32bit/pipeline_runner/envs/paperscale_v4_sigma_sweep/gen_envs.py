@@ -103,7 +103,7 @@ SIM_BULK_DATA_FORMAT=hex
 SIM_GRANULARITY=byte
 SIM_NOISE_SIGMA={sigma_f}
 SIM_MODE={sim_mode}
-SIM_HD_ADD_SCALE={hd_add_scale}
+SIM_HD_SCALE={hd_add_scale}
 {extra_sim}\
 SIM_SEED_RE=128
 SIM_SEED_DN=256

@@ -203,7 +203,7 @@ SIM_NOISE_SIGMA=0.01
 
 # Scale of the Hamming-distance component added on top of the primary model.
 # 0.0 disables it (default). Set > 0 to model bus / register transition leakage.
-SIM_HD_ADD_SCALE=0.0
+SIM_HD_SCALE=0.0
 
 # Per-component scale overrides. Leave commented to use the mode defaults:
 #   hw_scale  defaults to 1.0 for hw/mixed, 0.0 for f9/id

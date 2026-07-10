@@ -32,7 +32,7 @@ Options:
   -h, --help        Show this help
 
 What gets synced:
-  KeccakSim_v2.py, KeccakSim_BI_TA.py            (sandbox root)
+  KeccakSim_v3.py, KeccakSim_v2.py, KeccakSim_BI_TA.py  (sandbox root)
   project_SHA3-32bit/global_config.py
   project_SHA3-32bit/run_*.sh
   project_SHA3-32bit/pipeline_runner/*.sh
@@ -95,7 +95,7 @@ sync_one() {
   fi
 
   # simulator scripts at sandbox root
-  for SIM in "${REPO_SRC}/KeccakSim_v2.py" "${REPO_SRC}/KeccakSim_BI_TA.py"; do
+  for SIM in "${REPO_SRC}/KeccakSim_v3.py" "${REPO_SRC}/KeccakSim_v2.py" "${REPO_SRC}/KeccakSim_BI_TA.py"; do
     maybe_cp "${SIM}" "${SANDBOX}/$(basename "${SIM}")"
   done
 

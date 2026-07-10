@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Generate smoke v7 pure-HD sigma sweep env files (9 total).
+
+Motivation: pure HD (mode=hd, no HW/F9/ID component) is being promoted from a single
+diagnostic data point (smoke_v3_hd_pure_sigma1p0, sigma=1.0 only) into the main
+leakage-model comparison, replacing the smoke-scale "HD" rows that were actually
+combined HW+HD additive leakage. This sweep provides the full 9-point noise range
+needed for the main sigma-sweep tables/figures, generated on KeccakSim_v3 (mode=hd
+is a v3-only addition -- see KeccakSim_v3.py docstring). The combined HW+HD sweep
+(smoke_v2..v6) is not rerun -- it is repurposed as-is into the mixed-mode
+diagnostics section.
+
+ICS level 40 (not the main sweep's level 90): established necessary by the
+smoke_v3_hd_pure_sigma1p0 pilot -- level 90 produces empty ICS arrays for the
+deeper (C/D) families under pure-HD leakage, since HD's per-byte discriminability
+is much weaker than F9/HW's. SASCA params (200 iterations, 201 rate points, 8-bit
+step) match the current smoke_v6 main-sweep convention for comparability.
+
+sigma=1.0 duplicates smoke_v3_hd_pure_sigma1p0 for cross-check (same config
+modulo the v2->v3 hd_add_scale->hd_scale rename, which is behavior-preserving --
+see KeccakSim_v3.py verification).
+"""
+import os
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+SIGMAS = [
+    ("0p1", 0.1, 1), ("0p5", 0.5, 2), ("1p0", 1.0, 3),
+    ("1p5", 1.5, 4), ("2p0", 2.0, 5), ("2p5", 2.5, 6),
+    ("3p0", 3.0, 7), ("3p5", 3.5, 8), ("4p0", 4.0, 9),
+]
+
+TEMPLATE = """\
+# KeccakSim_v3 -- pure HD (mode=hd, hd_scale=1.0 default), sigma={sigma_f}.
+# Promotes pure HD from a single diagnostic point (smoke_v3_hd_pure_sigma1p0) into
+# the main leakage-model sigma sweep, replacing the smoke "HD" rows that were
+# actually combined HW+HD additive leakage.
+# ICS level 40 (not 90): level 90 leaves deeper families with empty ICS arrays
+# under pure-HD leakage (see smoke_v3_hd_pure_sigma1p0 pilot).
+# Smoke: 10 ref, 10 det, 50 training, 20 validation sets. ICS level 40.
+# Sweep step {step}/9.
+SHA3_INPUTS=16
+SHA3_INVOCATIONS=10
+
+SHA3_REFERENCE_FOLDERS=10
+SHA3_REFERENCE_TRACE_LEN=55296
+
+SHA3_DETECTION_TRACE_LEN=55296
+SHA3_DETECTION_SET_COUNT=10
+SHA3_DETECTION_SETS_PER_PART=10
+SHA3_DETECTION_CORR_BOUND=0.0
+SHA3_DETECTION_TRACE_OFFSET=0
+SHA3_DETECTION_PPC=1
+SHA3_DETECTION_OUTPUT_SIZE=55296
+SHA3_DETECTION_ROUNDS=4
+SHA3_DETECTION_ICS_WORDS_AB=50
+SHA3_DETECTION_ICS_WORDS_CD=10
+SHA3_DETECTION_ICS_THRESHOLDS=0.09,0.08,0.07,0.06,0.05,0.04,0.03,0.02,0.01
+SHA3_DETECTION_SAMPLE_SHIFT=0
+SHA3_DETECTION_SAMPLE_WIDTH=1
+
+SHA3_TRAINING_SET_COUNT=50
+SHA3_TRAINING_TRACE_LEN=55296
+SHA3_TRAINING_TRACE_OFFSET=0
+SHA3_TRAINING_PPC=1
+SHA3_TRAINING_OUTPUT_SIZE=55296
+SHA3_TRAINING_SETS_PER_PART=25
+SHA3_TRAINING_CORR_BOUND=0.0
+SHA3_TRAINING_ICS_LEVEL=40
+
+SHA3_VALIDATION_INPUTS=10
+SHA3_VALIDATION_SET_COUNT=20
+SHA3_VALIDATION_TRACE_OFFSET=0
+SHA3_VALIDATION_PPC=1
+SHA3_VALIDATION_OUTPUT_SIZE=55296
+SHA3_VALIDATION_CORR_BOUND=0.0
+SHA3_VALIDATION_SETS_PER_PART=10
+SHA3_VALIDATION_TEMPLATE_TAG=40
+SHA3_VALIDATION_ICS_TAG=40
+
+SHA3_SASCA_TRACE_COUNT=50
+SHA3_SASCA_TEMPLATE_TAG=40
+SHA3_SASCA_ICS_TAG=40
+SHA3_SASCA_PPC=1
+SHA3_SASCA_ITERATION_COUNT=200
+SHA3_SASCA_RATE_BP_ITERATION_COUNT=200
+SHA3_SASCA_RATE_POINT_COUNT=201
+SHA3_SASCA_RATE_STEP_BITS=8
+SHA3_SASCA_ALLOWED_WRONG_BITS=0
+SHA3_SASCA_OUTPUT_BITS=512
+
+
+SIM_ALGORITHM=sha3-512
+SIM_TRACE_FORMAT=bin
+SIM_TRACE_DTYPE=float64
+SIM_BULK_DATA_FORMAT=hex
+SIM_GRANULARITY=byte
+SIM_NOISE_SIGMA={sigma_f}
+SIM_MODE=hd
+SIM_HD_SCALE=1.0
+SIM_SEED_RE=128
+SIM_SEED_DN=256
+SIM_SEED_TR=512
+SIM_SEED_TS=1024
+"""
+
+count = 0
+for sigma_s, sigma_f, step in SIGMAS:
+    content = TEMPLATE.format(sigma_f=sigma_f, step=step)
+    fname = os.path.join(SCRIPT_DIR, f".env_smoke_v7_hd_pure_sigma{sigma_s}")
+    with open(fname, "w") as f:
+        f.write(content)
+    count += 1
+    print(f"  wrote {fname}")
+
+print(f"\nGenerated {count} env files.")

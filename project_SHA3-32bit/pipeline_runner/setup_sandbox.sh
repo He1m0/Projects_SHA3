@@ -37,7 +37,7 @@ Options:
   -h, --help        Show this help
 
 What gets copied (code-only; Raw/, *.hdf5, templateLDA/ are excluded):
-  KeccakSim_v2.py / KeccakSim_BI_TA.py         at sandbox root
+  KeccakSim_v3.py / KeccakSim_v2.py / KeccakSim_BI_TA.py  at sandbox root
   project_SHA3-32bit/global_config.py
   project_SHA3-32bit/run_*.sh
   project_SHA3-32bit/pipeline_runner/ (scripts + envs, no runs_archive)
@@ -100,7 +100,7 @@ for VENV_CANDIDATE in "${REPO_SRC}/.venv" "${REPO_SRC}/venv"; do
 done
 
 # --- simulator scripts at sandbox root ---
-for SIM in "${REPO_SRC}/KeccakSim_v2.py" "${REPO_SRC}/KeccakSim_BI_TA.py"; do
+for SIM in "${REPO_SRC}/KeccakSim_v3.py" "${REPO_SRC}/KeccakSim_v2.py" "${REPO_SRC}/KeccakSim_BI_TA.py"; do
   if [ -f "${SIM}" ]; then
     cp "${SIM}" "${SANDBOX}/"
     echo "  copied $(basename "${SIM}")"

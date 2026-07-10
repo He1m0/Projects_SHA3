@@ -10,7 +10,7 @@ f9mixed diagnostics.
 
 SNR-equalized convention (matches smoke_v6 pure-F9/ID sweep and the existing
 smoke_v6_f9mixed_hw_sigma1p0 diagnostic): SIM_F9_SCALE=1.7321=sqrt(3) so F9's
-Var_signal=2.0, matching HW at hw_scale=1.0. SIM_HD_ADD_SCALE=0.0 (no HD component
+Var_signal=2.0, matching HW at hw_scale=1.0. SIM_HD_SCALE=0.0 (no HD component
 in this mode -- F9+HW only).
 
 ICS level 90 uniformly, same as smoke_v6.
@@ -95,7 +95,7 @@ SIM_GRANULARITY=byte
 SIM_NOISE_SIGMA={sigma_f}
 SIM_MODE=mixed
 SIM_HW_SCALE=1.0
-SIM_HD_ADD_SCALE=0.0
+SIM_HD_SCALE=0.0
 SIM_F9_SEED=2839
 SIM_F9_C8_RANGE=0.5
 SIM_F9_SCALE=1.7321

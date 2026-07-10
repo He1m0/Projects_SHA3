@@ -5,8 +5,10 @@ set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 WORKSPACE_DIR="$(CDPATH= cd -- "${PROJECT_DIR}/.." && pwd)"
-# Default to v2 simulator; set SIM_SCRIPT_OVERRIDE in env to use legacy KeccakSim_BI_TA.py.
-SIM_SCRIPT="${WORKSPACE_DIR}/KeccakSim_v2.py"
+# Default to v3 simulator. Set SIM_SCRIPT_OVERRIDE in env to use KeccakSim_v2.py (exact
+# reproduction of any run archived before the v3 hd_scale/mode=hd refactor) or the legacy
+# KeccakSim_BI_TA.py.
+SIM_SCRIPT="${WORKSPACE_DIR}/KeccakSim_v3.py"
 if [ -n "${SIM_SCRIPT_OVERRIDE:-}" ]; then
   SIM_SCRIPT="${SIM_SCRIPT_OVERRIDE}"
 fi
@@ -308,14 +310,16 @@ simulate_group() {
 
   log "SIM  : ${GROUP} (folders=${FOLDERS}, traces/folder=${TRACES_PER_FOLDER}, seed=${SEED})"
 
-  # Detect which simulator is in use by checking for v2-specific flag.
+  # Detect which simulator is in use.
   IS_V2=0
+  IS_V3=0
   case "${SIM_SCRIPT}" in
     *KeccakSim_v2*) IS_V2=1 ;;
+    *KeccakSim_v3*) IS_V3=1 ;;
   esac
 
-  if [ "${IS_V2}" = "1" ]; then
-    # --- KeccakSim_v2 invocation ---
+  if [ "${IS_V2}" = "1" ] || [ "${IS_V3}" = "1" ]; then
+    # --- KeccakSim_v2 / v3 invocation (shared shape; v3 adds mode=hd and --hd-scale) ---
     # F9 table: generate once per run, reuse across all groups.
     # Needed for mode=f9, mode=mixed, or any explicit SIM_F9_SCALE > 0.
     F9_FLAGS=""
@@ -348,10 +352,20 @@ simulate_group() {
     fi
     # Optional per-component scale overrides (omit flags when not set so the
     # simulator applies mode-appropriate defaults for backward compatibility).
+    # SIM_HD_SCALE is the single canonical env var for the HD component; v2 only knows
+    # --hd-add-scale (always summed on top, regardless of mode) while v3 knows --hd-scale
+    # (a peer of hw/f9/id scale, with mode=hd defaulting it to 1.0) — translated here so
+    # env files don't need to know which script ends up running them.
     SCALE_FLAGS=""
     [ -n "${SIM_HW_SCALE:-}" ] && SCALE_FLAGS="${SCALE_FLAGS} --hw-scale ${SIM_HW_SCALE}"
     [ -n "${SIM_F9_SCALE:-}" ] && SCALE_FLAGS="${SCALE_FLAGS} --f9-scale ${SIM_F9_SCALE}"
     [ -n "${SIM_ID_SCALE:-}" ] && SCALE_FLAGS="${SCALE_FLAGS} --id-scale ${SIM_ID_SCALE}"
+    if [ "${IS_V2}" = "1" ]; then
+      HD_FLAGS="--hd-add-scale ${SIM_HD_SCALE:-0.0}"
+    else
+      HD_FLAGS=""
+      [ -n "${SIM_HD_SCALE:-}" ] && HD_FLAGS="--hd-scale ${SIM_HD_SCALE}"
+    fi
     python3 "${SIM_SCRIPT}" \
       --algorithm "${SIM_ALGORITHM:-sha3-512}" \
       --trace \
@@ -366,9 +380,9 @@ simulate_group() {
       --mode "${SIM_MODE:-hw}" \
       --granularity "${SIM_GRANULARITY:-byte}" \
       --noise-sigma "${SIM_NOISE_SIGMA:-0.01}" \
-      --hd-add-scale "${SIM_HD_ADD_SCALE:-0.0}" \
       --bulk-seed "${SEED}" \
       ${SCALE_FLAGS} \
+      ${HD_FLAGS} \
       ${F9_FLAGS}
   else
     # --- Legacy KeccakSim_BI_TA.py invocation (archive reproducibility) ---
@@ -402,7 +416,7 @@ simulate_group() {
       --pbw-c8-range "${SIM_PBW_C8_RANGE:-0.5}" \
       ${PBW_SHARED_FLAG} \
       ${PBW_C_SIGNED_FLAG} \
-      --hd-add-scale "${SIM_HD_ADD_SCALE:-0.0}" \
+      --hd-add-scale "${SIM_HD_SCALE:-0.0}" \
       --leak-repeat "${SIM_LEAK_REPEAT:-1}" \
       --common-wave-scope "${SIM_COMMON_WAVE_SCOPE:-invocation}" \
       --hw-ratio "${SIM_HW_RATIO:-0.65}"
