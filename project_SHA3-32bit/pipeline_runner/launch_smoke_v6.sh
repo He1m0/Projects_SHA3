@@ -12,6 +12,8 @@
 #   sh launch_smoke_v6.sh --wave all        (all 18 runs)
 #   sh launch_smoke_v6.sh --wave f9         (all 9 f9 runs)
 #   sh launch_smoke_v6.sh --wave id         (all 9 id runs)
+#   sh launch_smoke_v6.sh --wave f9mixed_hw (F9+HW mixed-leakage sigma sweep — 8 runs;
+#                                            σ=1.0 already archived, so it's skipped here)
 #   sh launch_smoke_v6.sh --status
 #   sh launch_smoke_v6.sh --dry-run --wave all
 
@@ -19,6 +21,7 @@ set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ENVS_DIR="${SCRIPT_DIR}/envs/smoke_v6_sigma_sweep"
+F9MIXED_HW_ENVS_DIR="${SCRIPT_DIR}/envs/smoke_v6_f9mixed_hw_sigma_sweep"
 DRY_RUN=0
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -80,6 +83,25 @@ launch_mode() {
   rm -rf "${tmp_dir}"
 }
 
+launch_f9mixed_hw() {
+  echo "=== smoke-v6: F9+HW mixed-leakage sigma sweep (8 runs; sigma=1.0 already archived) ==="
+  tmp_dir="/tmp/smoke_v6_f9mixed_hw_$$"
+  mkdir -p "${tmp_dir}"
+  for sig in 0p1 0p5 1p5 2p0 2p5 3p0 3p5 4p0; do
+    cp "${F9MIXED_HW_ENVS_DIR}/.env_smoke_v6_f9mixed_hw_sigma${sig}" "${tmp_dir}/"
+  done
+  if [ "${DRY_RUN}" -eq 1 ]; then
+    echo "  [DRY RUN] would launch 8 runs from ${tmp_dir}"
+    ls "${tmp_dir}"
+    rm -rf "${tmp_dir}"
+    return
+  fi
+  sh "${SCRIPT_DIR}/run_sandboxes.sh" \
+    --envs-dir "${tmp_dir}" \
+    --ssh IDP
+  rm -rf "${tmp_dir}"
+}
+
 # ── status ────────────────────────────────────────────────────────────────────
 
 show_status() {
@@ -105,6 +127,29 @@ for mode in f9 id; do
       echo "  detect   ${mode}_sigma${sig}: $last"
     fi
   done
+done'
+  echo ""
+  echo "=== Smoke v6 f9mixed_hw status ==="
+  echo ""
+  ssh IDP '
+mode=f9mixed_hw
+for sig in 0p1 0p5 1p0 1p5 2p0 2p5 3p0 3p5 4p0; do
+  sb=/storage/ge96pug/Projects_SHA3_sandbox_smoke_v6_${mode}_sigma${sig}
+  plr="$sb/project_SHA3-32bit/pipeline_runner"
+  log="$plr/sandbox_smoke_v6_${mode}_sigma${sig}.log"
+  if [ ! -f "$log" ]; then
+    echo "  not_started ${mode}_sigma${sig}"
+    continue
+  fi
+  if grep -q "COMPLETE" "$log" 2>/dev/null; then
+    echo "  DONE     ${mode}_sigma${sig}"
+  elif grep -q "\[MOVE:DN\]" "$log" 2>/dev/null; then
+    last=$(tail -1 "$log" 2>/dev/null | cut -c1-80)
+    echo "  training ${mode}_sigma${sig}: $last"
+  else
+    last=$(tail -1 "$log" 2>/dev/null | cut -c1-80)
+    echo "  detect   ${mode}_sigma${sig}: $last"
+  fi
 done'
 }
 
@@ -149,8 +194,11 @@ case "${WAVE}" in
   id)
     launch_mode id
     ;;
+  f9mixed_hw)
+    launch_f9mixed_hw
+    ;;
   *)
-    echo "Unknown wave: ${WAVE}. Use: sanity, all, f9, id." >&2
+    echo "Unknown wave: ${WAVE}. Use: sanity, all, f9, id, f9mixed_hw." >&2
     exit 1
     ;;
 esac

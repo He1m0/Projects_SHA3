@@ -155,6 +155,21 @@ Save all comparison outputs under `runs_archive/_compare_plots/<subdir>/`:
 
 See `runs_archive/_compare_plots/README.md` for naming conventions.
 
+## Disk hygiene on IDP
+
+The `/storage` volume on the IDP remote host is shared with other users and fills quickly.
+After archiving a completed run locally, immediately delete its sandbox and traces dir:
+
+```sh
+ssh IDP 'rm -rf /storage/ge96pug/Projects_SHA3_sandbox_<label>'
+ssh IDP 'rm -rf /storage/ge96pug/traces_<label>'
+```
+
+Archived runs carry all data needed for comparison plots — the remote sandbox and traces are
+not needed after archiving. Failure to do this caused a full-disk incident on 2026-06-03
+(~4–5 TB of accumulated completed runs), which crashed seven active training runs.
+Check disk usage periodically: `ssh IDP 'df -h /storage/'`.
+
 ## Typical evaluation workflow
 
 For a new scale that just finished all 36 runs:

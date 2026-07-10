@@ -48,6 +48,8 @@ for run in "${RUNS[@]}"; do
             --exclude='*.npy' \
             --exclude='__pycache__/' \
             --exclude='.env' \
+            --exclude='Predictions/' \
+            --exclude='Success/' \
             "${LOCAL_SRC}/" \
             "${REMOTE_USER}@${REMOTE_HOST}:${proj}/"
     fi
@@ -57,8 +59,8 @@ for run in "${RUNS[@]}"; do
     if [ "${DRY_RUN}" -eq 1 ]; then
         echo "    [dry-run] sed -i SHA3_SASCA_ITERATION_COUNT=200 in ${proj}/pipeline_runner/.env"
     else
-        ssh "${REMOTE_HOST}" "sed -i 's/^SHA3_SASCA_ITERATION_COUNT=.*/SHA3_SASCA_ITERATION_COUNT=200/' ${proj}/pipeline_runner/.env"
-        result=$(ssh "${REMOTE_HOST}" "grep SHA3_SASCA_ITERATION_COUNT ${proj}/pipeline_runner/.env")
+        ssh "${REMOTE_HOST}" "sed -i 's/^SHA3_SASCA_ITERATION_COUNT=.*/SHA3_SASCA_ITERATION_COUNT=200/' ${proj}/.env"
+        result=$(ssh "${REMOTE_HOST}" "grep SHA3_SASCA_ITERATION_COUNT ${proj}/.env")
         log "  verified: ${result}"
     fi
 
@@ -74,7 +76,7 @@ for run in "${RUNS[@]}"; do
 set -euo pipefail
 base="${proj}"
 log_file="${log_file}"
-cd "\${base}/pipeline_runner"
+cd "\${base}"
 source .env 2>/dev/null || true
 
 echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Starting paperscale_v4 iteration scan: ${run}"
