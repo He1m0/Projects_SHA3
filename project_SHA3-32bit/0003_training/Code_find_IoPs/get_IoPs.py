@@ -1,5 +1,6 @@
 import numpy as np
 import h5py
+import os
 import sys
 import time
 from pathlib import Path
@@ -33,6 +34,10 @@ class IOPS_Extractor:
       self.CompleteTraceFiles[t].close()
   
   def get_IoPs(self, Tag, Num):
+    name_output = 'IoPs/Ints_'+Tag+'_i'+str(Num).zfill(2)+'.hdf5'
+    if os.path.exists(name_output):
+      print(Tag+' i'+str(Num).zfill(2), 'already exists, skipping')
+      return
     print('=====================================================')
     print(Tag+' i'+str(Num).zfill(2))
     name_ics = ICS_DIR+'ics_'+Tag+'_i'+str(Num).zfill(2)+'.npy'
@@ -47,10 +52,15 @@ class IOPS_Extractor:
       print('part '+str(part).zfill(2), time.asctime())
       data_unique = self.CompleteTraceFiles[part]['Traces'][:, unique_cols]
       IoPs.append(data_unique[:, inverse])
-    name_output = 'IoPs/Ints_'+Tag+'_i'+str(Num).zfill(2)+'.hdf5'
-    FILE = h5py.File(name_output, 'w')
+    # Write to a temp name and rename into place atomically -- if this
+    # process is killed mid-write, no partial/truncated file is left
+    # behind under the final name, so the exists-check above can't be
+    # fooled into skipping a corrupt output on a later resume.
+    tmp_output = name_output + '.tmp'
+    FILE = h5py.File(tmp_output, 'w')
     FILE.create_dataset('IoPs', compression="gzip", compression_opts=9, data=np.vstack(IoPs))
     FILE.close()
+    os.replace(tmp_output, name_output)
   
   def get_state(self, tag, lower, upper):
     for ints in range(lower, upper):
