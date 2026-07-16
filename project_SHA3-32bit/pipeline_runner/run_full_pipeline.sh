@@ -5,13 +5,6 @@ set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 WORKSPACE_DIR="$(CDPATH= cd -- "${PROJECT_DIR}/.." && pwd)"
-# Default to v3 simulator. Set SIM_SCRIPT_OVERRIDE in env to use KeccakSim_v2.py (exact
-# reproduction of any run archived before the v3 hd_scale/mode=hd refactor) or the legacy
-# KeccakSim_BI_TA.py.
-SIM_SCRIPT="${WORKSPACE_DIR}/KeccakSim_v3.py"
-if [ -n "${SIM_SCRIPT_OVERRIDE:-}" ]; then
-  SIM_SCRIPT="${SIM_SCRIPT_OVERRIDE}"
-fi
 ICS_CHECK_SCRIPT="${SCRIPT_DIR}/check_ics_archive.py"
 
 ENV_FILE="${PROJECT_DIR}/.env_debug"
@@ -116,11 +109,6 @@ if [ ! -f "${ENV_FILE}" ]; then
   exit 1
 fi
 
-if [ "$SKIP_SIM" -eq 0 ] && [ ! -f "${SIM_SCRIPT}" ]; then
-  echo "Error: simulator not found: ${SIM_SCRIPT}" >&2
-  exit 1
-fi
-
 if [ -n "${CLI_TRACES_DIR}" ]; then
   TRACES_DIR="${CLI_TRACES_DIR}"
   export TRACES_DIR
@@ -147,6 +135,21 @@ set +a
 if [ -n "${CLI_TRACES_DIR}" ]; then
   TRACES_DIR="${CLI_TRACES_DIR}"
   export TRACES_DIR
+fi
+
+# Default to v3 simulator. Set SIM_SCRIPT_OVERRIDE (in the env profile, or the
+# calling shell) to use KeccakSim_v2.py (exact reproduction of any run
+# archived before the v3 hd_scale/mode=hd refactor), KeccakSim_v4.py (word-mix
+# emission kernel), or the legacy KeccakSim_BI_TA.py. Resolved after sourcing
+# ENV_FILE so a profile can select the simulator script itself, not just its
+# flags.
+SIM_SCRIPT="${WORKSPACE_DIR}/KeccakSim_v3.py"
+if [ -n "${SIM_SCRIPT_OVERRIDE:-}" ]; then
+  SIM_SCRIPT="${SIM_SCRIPT_OVERRIDE}"
+fi
+if [ "$SKIP_SIM" -eq 0 ] && [ ! -f "${SIM_SCRIPT}" ]; then
+  echo "Error: simulator not found: ${SIM_SCRIPT}" >&2
+  exit 1
 fi
 
 log() {
@@ -313,12 +316,70 @@ simulate_group() {
   # Detect which simulator is in use.
   IS_V2=0
   IS_V3=0
+  IS_V4=0
   case "${SIM_SCRIPT}" in
     *KeccakSim_v2*) IS_V2=1 ;;
     *KeccakSim_v3*) IS_V3=1 ;;
+    *KeccakSim_v4*) IS_V4=1 ;;
   esac
 
-  if [ "${IS_V2}" = "1" ] || [ "${IS_V3}" = "1" ]; then
+  if [ "${IS_V4}" = "1" ]; then
+    # --- KeccakSim_v4 invocation: explicit scales only, no --mode (v4 dropped
+    # it — every mode was already reproducible as an explicit combination of
+    # the four scales). Also carries the new --emission-kernel axis. ---
+    F9_FLAGS=""
+    _NEEDS_F9=0
+    case "${SIM_F9_SCALE:-0}" in ""|0|0.0) ;; *) _NEEDS_F9=1 ;; esac
+    if [ "${_NEEDS_F9}" = "1" ]; then
+      _F9_BCS="${SIM_F9_BIT_COEFF_SCALE:-1.0}"
+      _F9_BCS_TAG=$(echo "${_F9_BCS}" | tr '.' 'p')
+      F9_TABLE_PATH="${SIM_F9_TABLE_PATH:-${TRACES_DIR}/f9_table_${SIM_GRANULARITY:-byte}_seed${SIM_F9_SEED:-2839}_bcs${_F9_BCS_TAG}.npy}"
+      F9_TABLE_SIZE=$(python3 -c "import sys; sys.path.insert(0,'${PROJECT_DIR}'); import global_config as c; print(c.REFERENCE_TRACE_LEN)")
+      if [ ! -f "${F9_TABLE_PATH}" ]; then
+        log "F9TBL: generating ${F9_TABLE_PATH} (size=${F9_TABLE_SIZE}, bcs=${_F9_BCS})"
+        python3 "${SIM_SCRIPT}" \
+          --generate-f9-table \
+          --f9-table "${F9_TABLE_PATH}" \
+          --f9-table-size "${F9_TABLE_SIZE}" \
+          --granularity "${SIM_GRANULARITY:-byte}" \
+          --f9-seed "${SIM_F9_SEED:-2839}" \
+          --f9-c8-range "${SIM_F9_C8_RANGE:-0.5}" \
+          --f9-bit-coeff-scale "${_F9_BCS}"
+      fi
+      F9_FLAGS="--f9-table ${F9_TABLE_PATH} --f9-table-size ${F9_TABLE_SIZE} --f9-seed ${SIM_F9_SEED:-2839} --f9-c8-range ${SIM_F9_C8_RANGE:-0.5} --f9-bit-coeff-scale ${_F9_BCS}"
+    fi
+    # v4 has no mode to fall back on for scale defaults — every scale must be
+    # explicit or default to 0.0 at this shell layer (unlike v2/v3's
+    # conditionally-included SCALE_FLAGS, which relied on mode-derived defaults).
+    EMISSION_KERNEL_FLAGS=""
+    if [ -n "${SIM_EMISSION_KERNEL_OFFSETS:-}" ]; then
+      EMISSION_KERNEL_FLAGS="${EMISSION_KERNEL_FLAGS} --emission-kernel-offsets ${SIM_EMISSION_KERNEL_OFFSETS}"
+    fi
+    if [ -n "${SIM_EMISSION_KERNEL_SIGMA:-}" ]; then
+      EMISSION_KERNEL_FLAGS="${EMISSION_KERNEL_FLAGS} --emission-kernel-sigma ${SIM_EMISSION_KERNEL_SIGMA}"
+    fi
+    python3 "${SIM_SCRIPT}" \
+      --algorithm "${SIM_ALGORITHM:-sha3-512}" \
+      --trace \
+      --bulk-invocations "${SHA3_INVOCATIONS}" \
+      --bulk-traces-per-folder "${TRACES_PER_FOLDER}" \
+      --bulk-folders "${FOLDERS}" \
+      --bulk-output-dir "${BASE_DIR}/Raw_${GROUP}_" \
+      --bulk-index-dir "${INDEX_DIR}" \
+      --trace-format "${SIM_TRACE_FORMAT:-bin}" \
+      --trace-dtype "${SIM_TRACE_DTYPE:-float64}" \
+      --bulk-data-format "${SIM_BULK_DATA_FORMAT:-hex}" \
+      --granularity "${SIM_GRANULARITY:-byte}" \
+      --noise-sigma "${SIM_NOISE_SIGMA:-0.01}" \
+      --bulk-seed "${SEED}" \
+      --hw-scale "${SIM_HW_SCALE:-0.0}" \
+      --f9-scale "${SIM_F9_SCALE:-0.0}" \
+      --id-scale "${SIM_ID_SCALE:-0.0}" \
+      --hd-scale "${SIM_HD_SCALE:-0.0}" \
+      --emission-kernel "${SIM_EMISSION_KERNEL:-single}" \
+      ${EMISSION_KERNEL_FLAGS} \
+      ${F9_FLAGS}
+  elif [ "${IS_V2}" = "1" ] || [ "${IS_V3}" = "1" ]; then
     # --- KeccakSim_v2 / v3 invocation (shared shape; v3 adds mode=hd and --hd-scale) ---
     # F9 table: generate once per run, reuse across all groups.
     # Needed for mode=f9, mode=mixed, or any explicit SIM_F9_SCALE > 0.
