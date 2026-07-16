@@ -195,6 +195,19 @@ deploy_env_file() {
 	else
 		cp "${env_src}" "${env_dest_dir}/${env_base}"
 	fi
+	# Some gen_envs.py scripts (e.g. smoke_v10_word_mix) embed a
+	# ${WORKSPACE_DIR} placeholder in SIM_SCRIPT_OVERRIDE -- it's only safe
+	# to resolve once the sandbox's real path is known, which is here. Left
+	# unresolved, it crashes any stage whose helpers re-source .env in a
+	# fresh shell (e.g. 0003_training/template_profiling_bytes/init.sh,
+	# under set -eu -- "WORKSPACE_DIR: unbound variable").
+	workspace_dir="${BASE_DIR}/Projects_SHA3_sandbox_${label}"
+	sub_cmd="sed -i 's#\${WORKSPACE_DIR}#${workspace_dir}#g' $(quote_sh "${env_dest_dir}/${env_base}")"
+	if [ "${IS_REMOTE}" -eq 1 ]; then
+		run_remote "${sub_cmd}"
+	else
+		run_local "${sub_cmd}"
+	fi
 }
 
 start_tmux_run() {

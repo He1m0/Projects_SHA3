@@ -64,6 +64,11 @@ require_non_empty_raw "${PROJECT_DIR}/0003_training/Raw"
 
 # Validate ICS archive before training — prevents silent template corruption from empty arrays.
 # Sources .env to read SHA3_TRAINING_ICS_LEVEL and SHA3_DETECTION_* params.
+# Runs under set -eu with no WORKSPACE_DIR of its own: assumes .env is
+# fully resolved (no shell-variable placeholders like ${WORKSPACE_DIR} --
+# see run_sandboxes.sh's deploy_env_file(), which resolves those at
+# deploy time). A hand-edited .env with an unresolved placeholder will
+# crash here with "unbound variable".
 if [ -f "${PROJECT_DIR}/.env" ]; then
   set -a
   # shellcheck disable=SC1090

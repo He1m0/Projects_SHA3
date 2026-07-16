@@ -100,7 +100,7 @@ for VENV_CANDIDATE in "${REPO_SRC}/.venv" "${REPO_SRC}/venv"; do
 done
 
 # --- simulator scripts at sandbox root ---
-for SIM in "${REPO_SRC}/KeccakSim_v3.py" "${REPO_SRC}/KeccakSim_v2.py" "${REPO_SRC}/KeccakSim_BI_TA.py"; do
+for SIM in "${REPO_SRC}/KeccakSim_v4.py" "${REPO_SRC}/KeccakSim_v3.py" "${REPO_SRC}/KeccakSim_v2.py" "${REPO_SRC}/KeccakSim_BI_TA.py"; do
   if [ -f "${SIM}" ]; then
     cp "${SIM}" "${SANDBOX}/"
     echo "  copied $(basename "${SIM}")"

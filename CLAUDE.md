@@ -54,6 +54,67 @@ Key parameters (with env-var name):
 - `SHA3_TRAINING_ICS_LEVEL` — picks which `ics_original_XXX.zip` flows into training
 - `SHA3_SASCA_*` — BP iterations, rate-scan resolution, output bits, damping
 
+## Remote host & concurrency
+
+Sweeps run on a shared remote host (`hsnbrgl.sec.ei.tum.de`, `ssh IDP`): 2×AMD
+EPYC 7552 (48c/96t per socket, 192 hardware threads total), 2 NUMA nodes
+(cross-node distance 32 vs. local 10), ~1TB RAM. Sandboxes live under
+`/storage/ge96pug/Projects_SHA3_sandbox_<label>/`.
+
+Two independent concurrency knobs exist here — easy to conflate, but they
+control different things:
+
+- **`SHA3_R2_THREADS`** (default 4) — a *per-process* BLAS/OMP thread cap,
+  exported as `OMP_NUM_THREADS`/`OPENBLAS_NUM_THREADS`/`MKL_NUM_THREADS`/
+  `NUMEXPR_NUM_THREADS`/`VECLIB_MAXIMUM_THREADS` in every `script_all.sh`
+  that runs numpy/sklearn/BLAS-heavy code (`Code_detection_R2`,
+  `Code_find_IoPs`, `template_profiling_bytes`, the `0005_SASCA` scan/answer/
+  table scripts, `template_validation_bytes`). **Convention: any new
+  `script_all.sh` that touches numpy/sklearn/BLAS must add the same 5-var
+  export.** Uncapped fan-out previously took down the scheduler at just 2-3
+  concurrent processes (~127 threads/process observed on this 192-core host,
+  the 2026-07-14 incident).
+- **`--r2-cap` / `r2_pressure()`** (default 20) — an *admission-control*
+  gate in `pipeline_runner/ics_gate_lib.sh` + `auto_sweep_monitor.sh`,
+  throttling how many sandboxes may be "pending R2" host-wide before
+  launching more. This is about how many *processes* run concurrently, not
+  how many threads each one gets — a separate lever from `SHA3_R2_THREADS`.
+  Raising it affects only sandboxes still queued to launch; it does nothing
+  for processes already running. Changing `SHA3_R2_THREADS` likewise only
+  affects processes launched after the change — neither knob can be applied
+  to an already-running process without killing and restarting its stage.
+
+**`SHA3_R2_THREADS` does not touch every bottleneck** — it's a BLAS/OMP
+thread cap, so it only affects numpy/sklearn linear-algebra calls (BLAS
+`gemm`, etc). `Code_find_IoPs/get_IoPs.py` looks like the same kind of
+numpy-heavy stage but its actual cost (empirically isolated: ~10-11
+minutes per "ints" group, ~99% of it in one phase) comes from thousands of
+individual single-column `h5py` fancy-index reads
+(`file['Traces'][:, L:U]`, one call per selected sample) against a source
+`Processed_HDF5` array chunked at `(32 rows, 864 cols)` with gzip level 9 —
+each single-column read forces a full chunk decompression to extract 1/864
+of its data, repeated per index. This is single-threaded HDF5 chunk
+decompression, not a BLAS operation `SHA3_R2_THREADS` has any effect on;
+the write side (also gzip level 9) is comparatively negligible (~5s vs.
+~10min). If this stage's runtime ever needs improving, the fix is in the
+read access pattern (batch the column indices into one fancy-index call
+per part, or re-chunk the source array column-friendly) — not the thread
+cap or `--r2-cap`.
+
+`.env` profile files may be sourced by more than one independent script, in
+fresh shells, at different times — not just `run_full_pipeline.sh`. A
+generator (`gen_envs.py`) must never leave the *deployed* copy containing an
+unresolved shell-variable placeholder (e.g. `${WORKSPACE_DIR}`): it only
+happens to expand correctly in `run_full_pipeline.sh` itself (which computes
+`WORKSPACE_DIR` in-process before sourcing `.env`), and crashes with
+`unbound variable` in any other script that re-sources `.env` fresh (e.g.
+`template_profiling_bytes/init.sh`, `run_0003_chain.sh`) — this happened for
+real in the smoke_v10 sweep. The fix point is `run_sandboxes.sh`'s
+`deploy_env_file()`, which resolves such placeholders to the sandbox's real
+path at deploy time, once the destination is known — resolve any future
+placeholder-style variable the same way rather than baking it into
+`gen_envs.py` (which doesn't know the eventual deploy path).
+
 ## Running the pipeline
 
 From `project_SHA3-32bit/pipeline_runner/`:

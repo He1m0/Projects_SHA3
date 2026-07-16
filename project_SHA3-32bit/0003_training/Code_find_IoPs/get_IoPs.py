@@ -37,15 +37,16 @@ class IOPS_Extractor:
     print(Tag+' i'+str(Num).zfill(2))
     name_ics = ICS_DIR+'ics_'+Tag+'_i'+str(Num).zfill(2)+'.npy'
     ICs = np.load(name_ics)
+    cols = np.concatenate([
+        np.arange(int(ICs[it]) * ICS_WINDOW, int(ICs[it]) * ICS_WINDOW + ICS_WINDOW)
+        for it in range(len(ICs))
+    ])
+    unique_cols, inverse = np.unique(cols, return_inverse=True)
     IoPs = []
     for part in range(0, PART_COUNT):
       print('part '+str(part).zfill(2), time.asctime())
-      IoPs_Part = []
-      for it in range(0, len(ICs)):
-        L = int(ICs[it])*ICS_WINDOW
-        U = L+ICS_WINDOW
-        IoPs_Part.append(self.CompleteTraceFiles[part]['Traces'][:,L:U])
-      IoPs.append(np.hstack(IoPs_Part))
+      data_unique = self.CompleteTraceFiles[part]['Traces'][:, unique_cols]
+      IoPs.append(data_unique[:, inverse])
     name_output = 'IoPs/Ints_'+Tag+'_i'+str(Num).zfill(2)+'.hdf5'
     FILE = h5py.File(name_output, 'w')
     FILE.create_dataset('IoPs', compression="gzip", compression_opts=9, data=np.vstack(IoPs))

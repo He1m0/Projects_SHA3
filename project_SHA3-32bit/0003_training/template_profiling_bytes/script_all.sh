@@ -27,6 +27,16 @@ cd "$SCRIPT_DIR"
 }
 
 ./init.sh
+# Template_profiling_round.py's numpy/sklearn calls fan out to ~1 BLAS
+# thread per core by default (same mechanism as Code_detection_R2's
+# detect_script.py -- see that script_all.sh for the incident this guards
+# against). Capped so multiple training stages can run concurrently without
+# oversubscribing the host.
+export OMP_NUM_THREADS="${SHA3_R2_THREADS:-4}"
+export OPENBLAS_NUM_THREADS="${SHA3_R2_THREADS:-4}"
+export MKL_NUM_THREADS="${SHA3_R2_THREADS:-4}"
+export NUMEXPR_NUM_THREADS="${SHA3_R2_THREADS:-4}"
+export VECLIB_MAXIMUM_THREADS="${SHA3_R2_THREADS:-4}"
 "$PYTHON" -W ignore Template_profiling_round.py 0
 "$PYTHON" -W ignore Template_profiling_round.py 1
 "$PYTHON" -W ignore Template_profiling_round.py 2
